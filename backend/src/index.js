@@ -44,6 +44,7 @@ app.use('/api/climb-logs', require('./routes/climb-logs'));
 app.use('/api/passes', require('./routes/passes'));
 app.use('/api/training', require('./routes/training'));
 app.use('/api/sessions', require('./routes/sessions'));
+app.use('/api/geo', require('./routes/geo'));
 
 // SPA 정적 서빙 (Phase 11 — web/dist 존재 시 자동 활성)
 const distDir = path.join(__dirname, '../../web/dist');
@@ -68,6 +69,11 @@ async function bootstrap() {
   app.listen(PORT, () => {
     console.log(`[Server] TheRoute API 서버 시작: http://localhost:${PORT}`);
     console.log(`[Server] AUTH_ENABLED=${process.env.AUTH_ENABLED || 'false'}`);
+    // 좌표 누락 암장 자동 보강 (카카오 키 없으면 no-op)
+    const { backfillGymCoordsOnce } = require('./routes/geo');
+    if (typeof backfillGymCoordsOnce === 'function') {
+      backfillGymCoordsOnce().catch(() => {});
+    }
   });
 }
 

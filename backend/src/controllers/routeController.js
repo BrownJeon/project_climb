@@ -1,5 +1,6 @@
 const { sequelize } = require('../config/database');
 const { ArRoute, User, Problem, Gym, Like, Bookmark, Comment } = require('../models');
+const { attachThumbnailAsync } = require('../services/thumbnail');
 
 const ROUTE_INCLUDE = [
   { model: User, as: 'author', attributes: ['id', 'nickname', 'profile_image'] },
@@ -133,7 +134,77 @@ async function createRoute(req, res, next) {
       tags: tags ? JSON.parse(tags) : null,
     });
 
+    attachThumbnailAsync({
+      ArRoute,
+      arRouteId: route.id,
+      videoFilePath: req.file.path,
+      videoFilename: req.file.filename,
+    });
+
     return res.status(201).json({ success: true, message: 'AR 공략이 등록되었습니다.', data: route });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PUT /api/routes/:id (multipart 옵션, 영상 파일 포함)
+async function updateRoute(req, res, next) {
+  try {
+    const route = await ArRoute.findByPk(req.params.id, { include: ROUTE_INCLUDE });
+    if (!route) {
+      return res.status(404).json({ success: false, message: '공략을 찾을 수 없습니다.', data: null });
+    }
+    if (Number(route.user_id) !== Number(req.user.id)) {
+      return res.status(403).json({ success: false, message: '수정 권한이 없습니다.', data: null });
+    }
+
+    const { title, description, color, level, gym_id, tags } = req.body;
+    const updates = {};
+
+    if (title !== undefined) updates.title = title.trim() || route.title;
+    if (description !== undefined) updates.description = description?.trim() ? description : null;
+    if (tags !== undefined) {
+      try {
+        updates.tags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+      } catch {
+        updates.tags = null;
+      }
+    }
+
+    // problem 갱신: color/level/gym_id 받아 동일 문제 findOrCreate
+    if (color || level || gym_id) {
+      const targetGymId = gym_id ? Number(gym_id) : (route.problem?.gym_id || null);
+      const newColor = color ?? route.problem?.color ?? null;
+      const newLevel = level ?? route.problem?.level ?? null;
+      if (targetGymId && newColor && newLevel) {
+        let problem = await Problem.findOne({
+          where: { gym_id: targetGymId, color: newColor, level: newLevel },
+        });
+        if (!problem) {
+          problem = await Problem.create({ gym_id: targetGymId, color: newColor, level: newLevel });
+        }
+        updates.problem_id = problem.id;
+      }
+    }
+
+    if (req.file) {
+      updates.video_url = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
+      updates.thumbnail_url = null; // 새 썸네일 추출 후 갱신
+    }
+
+    await route.update(updates);
+
+    if (req.file) {
+      attachThumbnailAsync({
+        ArRoute,
+        arRouteId: route.id,
+        videoFilePath: req.file.path,
+        videoFilename: req.file.filename,
+      });
+    }
+
+    const refreshed = await ArRoute.findByPk(route.id, { include: ROUTE_INCLUDE });
+    return res.json({ success: true, message: '영상이 수정되었습니다.', data: refreshed });
   } catch (err) {
     next(err);
   }
@@ -237,7 +308,48 @@ async function createComment(req, res, next) {
   }
 }
 
+// PATCH /api/routes/:id/comments/:commentId
+async function updateComment(req, res, next) {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: '댓글 내용을 입력해주세요.', data: null });
+    }
+    const comment = await Comment.findByPk(req.params.commentId);
+    if (!comment || Number(comment.ar_route_id) !== Number(req.params.id)) {
+      return res.status(404).json({ success: false, message: '댓글을 찾을 수 없습니다.', data: null });
+    }
+    if (Number(comment.user_id) !== Number(req.user.id)) {
+      return res.status(403).json({ success: false, message: '수정 권한이 없습니다.', data: null });
+    }
+    await comment.update({ content: content.trim() });
+    const withAuthor = await Comment.findByPk(comment.id, {
+      include: [{ model: User, as: 'author', attributes: ['id', 'nickname', 'profile_image'] }],
+    });
+    return res.json({ success: true, message: '댓글이 수정되었습니다.', data: withAuthor });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/routes/:id/comments/:commentId
+async function deleteComment(req, res, next) {
+  try {
+    const comment = await Comment.findByPk(req.params.commentId);
+    if (!comment || Number(comment.ar_route_id) !== Number(req.params.id)) {
+      return res.status(404).json({ success: false, message: '댓글을 찾을 수 없습니다.', data: null });
+    }
+    if (Number(comment.user_id) !== Number(req.user.id)) {
+      return res.status(403).json({ success: false, message: '삭제 권한이 없습니다.', data: null });
+    }
+    await comment.destroy();
+    return res.json({ success: true, message: '댓글이 삭제되었습니다.', data: null });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
-  listRoutes, getRoute, createRoute, deleteRoute,
-  toggleLike, toggleBookmark, getComments, createComment,
+  listRoutes, getRoute, createRoute, updateRoute, deleteRoute,
+  toggleLike, toggleBookmark, getComments, createComment, updateComment, deleteComment,
 };

@@ -36,11 +36,25 @@ const ArRoute = sequelize.define('ArRoute', {
     type: DataTypes.JSON,
     allowNull: true,
     comment: '{ version, duration, frames: [{time, type, position, order, color}] }',
+    get() {
+      const v = this.getDataValue('ar_data');
+      if (typeof v === 'string') {
+        try { return JSON.parse(v); } catch { return null; }
+      }
+      return v;
+    },
   },
   tags: {
     type: DataTypes.JSON,
     allowNull: true,
     comment: '{ wall_type, techniques: [], custom: [] }',
+    get() {
+      const v = this.getDataValue('tags');
+      if (typeof v === 'string') {
+        try { return JSON.parse(v); } catch { return null; }
+      }
+      return v;
+    },
   },
   like_count: {
     type: DataTypes.INTEGER.UNSIGNED,

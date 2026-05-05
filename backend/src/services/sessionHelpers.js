@@ -1,7 +1,7 @@
 /**
  * 통합 세션 엔드포인트(POST /api/sessions)와 단독 컨트롤러가 공유하는 검증·차감 헬퍼.
  */
-const { GymPass, ArRoute } = require('../models');
+const { GymPass, ArRoute, Gym } = require('../models');
 
 function ApiError(status, message) {
   const e = new Error(message);
@@ -28,7 +28,18 @@ async function loadAndValidatePass(gymPassId, gymId, visitedAt, userId, t) {
   const pass = await GymPass.findByPk(gymPassId, { transaction: t });
   if (!pass) throw ApiError(404, '이용권 없음');
   if (Number(pass.user_id) !== Number(userId)) throw ApiError(403, '이용권 권한 없음');
-  if (Number(pass.gym_id) !== Number(gymId)) throw ApiError(400, '다른 암장의 이용권은 사용할 수 없습니다.');
+  // 브랜드 매치: 같은 brand의 어떤 지점에서도 사용 가능
+  const targetGym = await Gym.findByPk(gymId, { attributes: ['brand', 'name'], transaction: t });
+  const targetBrand = targetGym?.brand || targetGym?.name;
+  const passBrand = pass.brand;
+  if (passBrand && targetBrand) {
+    if (String(passBrand) !== String(targetBrand)) {
+      throw ApiError(400, '다른 브랜드의 이용권은 사용할 수 없습니다.');
+    }
+  } else if (Number(pass.gym_id) !== Number(gymId)) {
+    // brand 정보가 없으면 기존 gym_id 매칭으로 fallback
+    throw ApiError(400, '다른 암장의 이용권은 사용할 수 없습니다.');
+  }
   if (pass.pass_type === 'count') {
     if (pass.remaining_count <= 0) throw ApiError(400, '이용권 잔여 횟수가 없습니다.');
     if (pass.end_date) {

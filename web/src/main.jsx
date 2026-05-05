@@ -12,6 +12,7 @@ import RouteDetailPage from './pages/RouteDetailPage';
 import GymListPage from './pages/GymListPage';
 import GymDetailPage from './pages/GymDetailPage';
 import CalendarPage from './pages/CalendarPage';
+import LogDetailPage from './pages/LogDetailPage';
 import TrainingPage from './pages/TrainingPage';
 import MyPage from './pages/MyPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/gyms" element={<GymListPage />} />
             <Route path="/gyms/:id" element={<GymDetailPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/logs/:id" element={<LogDetailPage />} />
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/me" element={<MyPage />} />
             <Route path="*" element={<NotFoundPage />} />

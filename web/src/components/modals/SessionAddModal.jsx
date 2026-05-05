@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Btn, ColorBadge, RadioOpt, Checkbox, Stepper, Pill } from '../atoms';
 import { I } from '../atoms/Icons';
 import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
@@ -23,6 +23,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
   const [gymId, setGymId] = useState(initialPrefill.gym_id || '');
   const [gyms, setGyms] = useState([]);
   const [memo, setMemo] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState('');
   const [passKind, setPassKind] = useState('');     // 'period' | 'count' | 'day'
   const [passId, setPassId] = useState('');
   const [periodPasses, setPeriodPasses] = useState([]);
@@ -76,6 +77,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
       visited_at: visitedAt,
       gym_id: gymId,
       memo: memo || '',
+      duration_minutes: durationMinutes === '' ? null : Number(durationMinutes),
       attempts: attempts.map((a) => {
         const row = {
           is_cleared: !!a.is_cleared,
@@ -135,14 +137,14 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
           background: 'var(--surface)', borderBottom: '1px solid var(--line)',
           position: 'sticky', top: 0, zIndex: 2,
         }}>
-          <button onClick={onClose} style={{ fontSize: 14, color: 'var(--ink-3)' }}>취소</button>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>운동 기록 추가</span>
           <button
             onClick={submit} disabled={!canSubmit || submitting}
             style={{ fontSize: 14, fontWeight: 700, color: canSubmit ? 'var(--primary)' : 'var(--ink-4)' }}
           >
             {submitting ? '저장 중...' : '저장'}
           </button>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>운동 기록 추가</span>
+          <button onClick={onClose} style={{ fontSize: 14, color: 'var(--ink-3)' }}>취소</button>
         </div>
 
         {error && (
@@ -155,10 +157,11 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
             <SectionLabel>기본</SectionLabel>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', overflow: 'hidden' }}>
               <FieldDate label="날짜" value={visitedAt} onChange={setVisitedAt} />
-              <FieldSelect
+              <GymCombobox
                 label="암장"
-                value={gymId} onChange={setGymId}
-                options={[{ value: '', label: '선택' }, ...gyms.map((g) => ({ value: g.id, label: g.name }))]}
+                value={gymId}
+                onChange={setGymId}
+                gyms={gyms}
               />
 
               {/* 이용권 */}
@@ -214,6 +217,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
                 </div>
               </div>
 
+              <FieldNumber label="시간(분)" value={durationMinutes} onChange={setDurationMinutes} placeholder="(선택) 예: 60" />
               <FieldText label="메모" value={memo} onChange={setMemo} placeholder="(선택) 한 줄 메모" isLast />
             </div>
           </div>
@@ -358,6 +362,101 @@ function FieldDate({ label, value, onChange }) {
   );
 }
 
+function gymLabel(g) {
+  return (g.brand || g.name || '') + (g.branch ? ` · ${g.branch}` : '');
+}
+
+function GymCombobox({ label, value, onChange, gyms }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  // 외부에서 value 변경 시 query 동기화
+  useEffect(() => {
+    if (!value) { setQuery(''); return; }
+    const g = gyms.find((x) => String(x.id) === String(value));
+    if (g) setQuery(gymLabel(g));
+  }, [value, gyms]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) { if (!wrapRef.current?.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const matched = gyms.filter((g) => {
+    if (!q) return true;
+    const hay = `${g.brand || ''} ${g.branch || ''} ${g.name || ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  function pick(g) {
+    onChange?.(g.id);
+    setQuery(gymLabel(g));
+    setOpen(false);
+  }
+
+  function clear() {
+    onChange?.('');
+    setQuery('');
+    setOpen(false);
+  }
+
+  return (
+    <div ref={wrapRef} style={{
+      display: 'flex', alignItems: 'center', padding: '12px 14px',
+      borderBottom: '1px solid var(--line)', position: 'relative',
+    }}>
+      <span style={{ fontSize: 13, color: 'var(--ink-3)', width: 60 }}>{label}<span style={{ color: 'var(--danger)' }}>*</span></span>
+      <input
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange?.(''); }}
+        onFocus={() => setOpen(true)}
+        placeholder="암장명 또는 지점 입력"
+        style={{ flex: 1, fontSize: 13.5, fontWeight: 600, border: 0, background: 'transparent', padding: 0, color: 'var(--ink-1)' }}
+      />
+      {value && (
+        <button type="button" onClick={clear} aria-label="선택 해제"
+          style={{ color: 'var(--ink-4)', padding: 4, marginRight: 2 }}>
+          {I.x(14)}
+        </button>
+      )}
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-label="목록 열기"
+        style={{ color: 'var(--ink-3)', padding: 4 }}>
+        {I.chev(14, open ? 'up' : 'down')}
+      </button>
+      {open && (
+        <div role="listbox" style={{
+          position: 'absolute', left: 14, right: 14, top: 'calc(100% - 1px)',
+          maxHeight: 220, overflowY: 'auto', zIndex: 20,
+          background: 'var(--surface)', border: '1px solid var(--line)',
+          borderRadius: 'var(--r-sm)', boxShadow: '0 8px 24px rgba(0,0,0,.08)',
+        }}>
+          {matched.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ink-4)' }}>
+              일치하는 암장이 없습니다.
+            </div>
+          ) : matched.map((g) => (
+            <button key={g.id} type="button" onClick={() => pick(g)}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '9px 12px', fontSize: 13,
+                background: String(g.id) === String(value) ? 'var(--surface-2)' : 'transparent',
+                color: 'var(--ink-1)', border: 0, borderBottom: '1px solid var(--line)',
+                cursor: 'pointer',
+              }}>
+              <span style={{ fontWeight: 700 }}>{g.brand || g.name}</span>
+              {g.branch && <span style={{ color: 'var(--ink-3)', marginLeft: 4 }}>· {g.branch}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FieldSelect({ label, value, onChange, options }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
@@ -366,6 +465,16 @@ function FieldSelect({ label, value, onChange, options }) {
         style={{ flex: 1, fontSize: 13.5, fontWeight: 600, border: 0, background: 'transparent', padding: 0 }}>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+    </div>
+  );
+}
+
+function FieldNumber({ label, value, onChange, placeholder, isLast }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', borderBottom: isLast ? 'none' : '1px solid var(--line)' }}>
+      <span style={{ fontSize: 13, color: 'var(--ink-3)', width: 60 }}>{label}</span>
+      <input type="number" min="0" value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder}
+        style={{ flex: 1, fontSize: 13.5, fontWeight: value ? 600 : 500, color: value ? 'var(--ink-1)' : 'var(--ink-4)', border: 0, background: 'transparent', padding: 0 }} />
     </div>
   );
 }

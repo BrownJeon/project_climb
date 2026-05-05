@@ -12,6 +12,7 @@ const TrainingGoal = sequelize.define('TrainingGoal', {
     comment: 'boulder_grade | endurance_metric | frequency | free',
   },
   metric_label: { type: DataTypes.STRING(80), allowNull: true },
+  current_metric_label: { type: DataTypes.STRING(40), allowNull: true, comment: '현재 난이도/측정 라벨' },
   target_value: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   current_value: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   target_date: { type: DataTypes.DATEONLY, allowNull: true },

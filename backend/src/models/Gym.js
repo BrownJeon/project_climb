@@ -10,6 +10,17 @@ const Gym = sequelize.define('Gym', {
   name: {
     type: DataTypes.STRING(100),
     allowNull: false,
+    comment: '표시용 통합 이름 (brand + branch)',
+  },
+  brand: {
+    type: DataTypes.STRING(80),
+    allowNull: true,
+    comment: '암장 브랜드/체인명 (예: 더클라임)',
+  },
+  branch: {
+    type: DataTypes.STRING(80),
+    allowNull: true,
+    comment: '지점 (예: 강남점)',
   },
   address: {
     type: DataTypes.STRING(255),

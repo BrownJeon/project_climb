@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { Btn, ColorBadge, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import { climbLogsApi } from '../api/climbLogs';
 import { useSessionAddModal } from '../contexts/SessionAddModalContext';
+import RecordActionMenu from '../components/RecordActionMenu';
+import RecordEditModal from '../components/modals/RecordEditModal';
+import ClearedSummary from '../components/ClearedSummary';
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function ymd(y, m, d) { return `${y}-${pad(m)}-${pad(d)}`; }
@@ -17,18 +21,31 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState(today.getDate());
   const [dotDates, setDotDates] = useState(new Set());
   const [logs, setLogs] = useState([]);
+  const [editLog, setEditLog] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
   const { open } = useSessionAddModal();
+  const navigate = useNavigate();
 
   useEffect(() => {
     climbLogsApi.monthDates(year, month).then((r) => {
       setDotDates(new Set(r.data?.dates || []));
     }).catch(() => {});
-  }, [year, month]);
+  }, [year, month, reloadTick]);
 
   useEffect(() => {
     const date = ymd(year, month, selected);
     climbLogsApi.byDate(date).then((r) => setLogs(r.data?.logs || [])).catch(() => {});
-  }, [year, month, selected]);
+  }, [year, month, selected, reloadTick]);
+
+  async function handleDeleteLog(log) {
+    if (!confirm('이 기록을 삭제하시겠어요? 되돌릴 수 없습니다.')) return;
+    try {
+      await climbLogsApi.remove(log.id);
+      setReloadTick((t) => t + 1);
+    } catch (e) {
+      alert(e.message || '삭제 실패');
+    }
+  }
 
   const grid = useMemo(() => {
     const first = new Date(year, month - 1, 1);
@@ -54,9 +71,23 @@ export default function CalendarPage() {
   const dayName = DAY_LABELS[selectedDate.getDay()];
   const totalCleared = logs.reduce((acc, l) => acc + (l.problems || []).filter((p) => p.is_cleared).length, 0);
 
+  const addBtn = (
+    <button
+      onClick={() => open({ initialPrefill: { visited_at: ymd(year, month, selected) } })}
+      aria-label="기록 추가"
+      style={{
+        width: 36, height: 36, borderRadius: 'var(--r-pill)',
+        display: 'grid', placeItems: 'center',
+        color: 'var(--ink-2)', background: 'var(--surface-2)',
+      }}
+    >
+      {I.plus(18)}
+    </button>
+  );
+
   return (
     <>
-      <TopBar title="캘린더" />
+      <TopBar right={addBtn} />
 
       {/* Month header */}
       <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
@@ -121,12 +152,16 @@ export default function CalendarPage() {
             기록이 없습니다
           </div>
         ) : logs.map((log) => (
-          <div key={log.id} style={{
-            background: 'var(--surface)', border: '1px solid var(--line)',
-            borderRadius: 'var(--r-md)', overflow: 'hidden',
-          }}>
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
+          <div key={log.id}
+            onClick={() => navigate(`/logs/${log.id}`)}
+            role="button" tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/logs/${log.id}`); }}
+            style={{
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)', overflow: 'hidden', cursor: 'pointer',
+            }}>
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{log.gym_name}</div>
                 {(log.gym_pass || log.used_day_pass) && (
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -136,44 +171,41 @@ export default function CalendarPage() {
                       : '일일이용권'}
                   </div>
                 )}
+                {log.problems?.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <ClearedSummary problems={log.problems} />
+                  </div>
+                )}
               </div>
-              <button style={{ color: 'var(--ink-4)' }}>{I.more(18)}</button>
+              <RecordActionMenu
+                onEdit={() => setEditLog(log)}
+                onDelete={() => handleDeleteLog(log)}
+              />
             </div>
 
             {log.memo && (
-              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)', fontSize: 12.5, color: 'var(--ink-2)' }}>
+              <div style={{ padding: '10px 14px', fontSize: 12.5, color: 'var(--ink-2)' }}>
                 <span style={{ color: 'var(--ink-4)', fontSize: 11, marginRight: 6 }}>메모</span>
                 {log.memo}
-              </div>
-            )}
-
-            {(log.problems?.length > 0) && (
-              <div style={{ padding: '8px 14px 12px' }}>
-                {log.problems.map((p, i) => (
-                  <div key={p.id || i} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-                    borderBottom: i < log.problems.length - 1 ? '1px solid var(--line)' : 'none',
-                  }}>
-                    <ColorBadge color={p.color} level={p.level} size="sm" />
-                    {p.is_cleared
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>{I.check(12)} 완등</span>
-                      : <span style={{ color: 'var(--ink-4)', fontSize: 12 }}>도전 중</span>}
-                    <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {p.attempts || 1}회</span>
-                    {p.ar_route && <span style={{ marginLeft: 'auto', color: 'var(--primary)' }}>{I.film(13)}</span>}
-                  </div>
-                ))}
               </div>
             )}
           </div>
         ))}
       </div>
 
-      <div style={{ padding: '0 16px 16px' }}>
-        <Btn variant="ghost" full icon={I.plus(15)}
-          onClick={() => open({ initialPrefill: { visited_at: ymd(year, month, selected) } })}>
-          기록 추가
-        </Btn>
-      </div>
+      {editLog && (
+        <RecordEditModal
+          kind="climb_log"
+          logId={editLog.id}
+          initial={{ memo: editLog.memo, date: editLog.visited_at, duration_minutes: editLog.duration_minutes, problems: editLog.problems }}
+          onSubmit={async ({ memo, date, duration_minutes }) => {
+            await climbLogsApi.update(editLog.id, { memo, visited_at: date, duration_minutes });
+            setReloadTick((t) => t + 1);
+          }}
+          onChanged={() => setReloadTick((t) => t + 1)}
+          onClose={() => setEditLog(null)}
+        />
+      )}
     </>
   );
 }

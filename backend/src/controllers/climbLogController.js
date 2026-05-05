@@ -1,5 +1,16 @@
 const { Op } = require('sequelize');
-const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, sequelize } = require('../models');
+const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, sequelize } = require('../models');
+const { attachThumbnailAsync } = require('../services/thumbnail');
+
+const COLOR_KR = {
+  red: '빨강🔴', orange: '주황🟠', yellow: '노랑🟡', green: '초록🟢',
+  blue: '파랑🔵', navy: '남색🟦', pink: '핑크🌸', purple: '보라🟣',
+  black: '검정⚫', white: '하양⚪', gray: '회색⬛',
+};
+function fmtRouteTitle({ color, level }) {
+  const c = COLOR_KR[color] || (color ? `◯${color}` : '◯');
+  return `${c} (${level || 'V?'})`;
+}
 
 /**
  * GET /api/climb-logs?year=2025&month=4
@@ -72,6 +83,7 @@ async function getLogsByDate(req, res, next) {
       gym_address: log.gym?.address || '',
       visited_at: log.visited_at,
       memo: log.memo,
+      duration_minutes: log.duration_minutes,
       gym_pass_id: log.gym_pass_id,
       gym_pass: log.gym_pass ? log.gym_pass.toJSON() : null,
       used_day_pass: !!log.used_day_pass,
@@ -91,6 +103,61 @@ async function getLogsByDate(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * GET /api/climb-logs/:id
+ * 단일 기록 상세 (problems + ar_route 포함)
+ */
+async function getLogById(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const log = await ClimbLog.findByPk(id, {
+      include: [
+        { model: Gym, as: 'gym', attributes: ['id', 'name', 'address'] },
+        {
+          model: GymPass, as: 'gym_pass',
+          attributes: ['id', 'pass_type', 'label', 'remaining_count', 'total_count', 'start_date', 'end_date'],
+          required: false,
+        },
+        {
+          model: ClimbLogProblem, as: 'problems',
+          include: [
+            { model: Problem, as: 'problem', attributes: ['id', 'level', 'color', 'section'], required: false },
+            { model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url'], required: false },
+          ],
+        },
+      ],
+    });
+    if (!log) return res.status(404).json({ success: false, data: null, message: '기록을 찾을 수 없습니다.' });
+    if (Number(log.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    const formatted = {
+      id: log.id,
+      gym_id: log.gym_id,
+      gym_name: log.gym?.name || '',
+      gym_address: log.gym?.address || '',
+      visited_at: log.visited_at,
+      memo: log.memo,
+      duration_minutes: log.duration_minutes,
+      gym_pass_id: log.gym_pass_id,
+      gym_pass: log.gym_pass ? log.gym_pass.toJSON() : null,
+      used_day_pass: !!log.used_day_pass,
+      problems: (log.problems || []).map((p) => ({
+        id: p.id,
+        problem_id: p.problem_id,
+        level: p.problem?.level || p.custom_level || '',
+        color: p.problem?.color || p.custom_color || '',
+        is_cleared: p.is_cleared,
+        attempts: p.attempts,
+        ar_route_id: p.ar_route_id,
+        ar_route: p.ar_route ? p.ar_route.toJSON() : null,
+      })),
+    };
+    return res.json({ success: true, data: formatted, message: null });
+  } catch (err) { next(err); }
 }
 
 /**
@@ -131,7 +198,17 @@ async function createLog(req, res, next) {
       pass = await GymPass.findByPk(gym_pass_id, { transaction: t });
       if (!pass) { await t.rollback(); return res.status(404).json({ success: false, data: null, message: '이용권 없음' }); }
       if (Number(pass.user_id) !== Number(userId)) { await t.rollback(); return res.status(403).json({ success: false, data: null, message: '이용권 권한 없음' }); }
-      if (Number(pass.gym_id) !== Number(gym_id)) { await t.rollback(); return res.status(400).json({ success: false, data: null, message: '다른 암장의 이용권은 사용할 수 없습니다.' }); }
+      const passBrand = pass.brand;
+      const gymBrand = gym.brand || gym.name;
+      if (passBrand && gymBrand) {
+        if (String(passBrand) !== String(gymBrand)) {
+          await t.rollback();
+          return res.status(400).json({ success: false, data: null, message: '다른 브랜드의 이용권은 사용할 수 없습니다.' });
+        }
+      } else if (Number(pass.gym_id) !== Number(gym_id)) {
+        await t.rollback();
+        return res.status(400).json({ success: false, data: null, message: '다른 암장의 이용권은 사용할 수 없습니다.' });
+      }
       if (pass.pass_type === 'count') {
         if (pass.remaining_count <= 0) { await t.rollback(); return res.status(400).json({ success: false, data: null, message: '이용권 잔여 횟수가 없습니다.' }); }
         if (pass.end_date) {
@@ -211,6 +288,206 @@ async function createLog(req, res, next) {
 }
 
 /**
+ * PATCH /api/climb-logs/:id
+ * 기록 수정 (memo, visited_at만 허용 — 이용권 차감/복구는 복잡하므로 별도)
+ */
+async function updateLog(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { memo, visited_at } = req.body;
+
+    const log = await ClimbLog.findByPk(id);
+    if (!log) return res.status(404).json({ success: false, data: null, message: '기록을 찾을 수 없습니다.' });
+    if (Number(log.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '수정 권한이 없습니다.' });
+    }
+
+    const updates = {};
+    if (memo !== undefined) updates.memo = memo;
+    if (visited_at !== undefined) updates.visited_at = visited_at;
+    if (req.body.duration_minutes !== undefined) {
+      updates.duration_minutes = req.body.duration_minutes === null || req.body.duration_minutes === ''
+        ? null : Number(req.body.duration_minutes);
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, data: null, message: '수정할 항목이 없습니다.' });
+    }
+
+    await log.update(updates);
+    return res.json({
+      success: true,
+      data: { id: log.id, memo: log.memo, visited_at: log.visited_at, duration_minutes: log.duration_minutes },
+      message: '기록이 수정되었습니다.',
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * PATCH /api/climb-logs/:logId/problems/:cpId
+ * 기록 내 개별 문제(시도) 수정 — is_cleared, attempts
+ */
+async function updateLogProblem(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId } = req.params;
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    const updates = {};
+    if (req.body.is_cleared !== undefined) updates.is_cleared = !!req.body.is_cleared;
+    if (req.body.attempts !== undefined) {
+      const n = Number(req.body.attempts);
+      if (!Number.isInteger(n) || n < 1) {
+        return res.status(400).json({ success: false, data: null, message: 'attempts는 1 이상의 정수' });
+      }
+      updates.attempts = n;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, data: null, message: '수정할 항목이 없습니다.' });
+    }
+    await cp.update(updates);
+    return res.json({ success: true, data: { id: cp.id, ...updates }, message: '항목이 수정되었습니다.' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * DELETE /api/climb-logs/:logId/problems/:cpId
+ * 기록 내 개별 문제(시도) 삭제
+ */
+async function deleteLogProblem(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId } = req.params;
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    await cp.destroy();
+    return res.json({ success: true, data: null, message: '항목이 삭제되었습니다.' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/climb-logs/:logId/problems
+ * 기록에 문제(시도) 추가 — color/level은 custom_*로 저장, attempts/is_cleared
+ */
+async function addLogProblem(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId } = req.params;
+    const { color, level, is_cleared = false, attempts = 1 } = req.body || {};
+    if (!color && !level) {
+      return res.status(400).json({ success: false, data: null, message: '색상 또는 등급을 입력하세요.' });
+    }
+    const n = Number(attempts);
+    if (!Number.isInteger(n) || n < 1) {
+      return res.status(400).json({ success: false, data: null, message: 'attempts는 1 이상의 정수' });
+    }
+    const log = await ClimbLog.findByPk(logId, { attributes: ['id', 'user_id'] });
+    if (!log) return res.status(404).json({ success: false, data: null, message: '기록 없음' });
+    if (Number(log.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    const cp = await ClimbLogProblem.create({
+      log_id: log.id,
+      problem_id: null,
+      custom_color: color || null,
+      custom_level: level || null,
+      is_cleared: !!is_cleared,
+      attempts: n,
+      ar_route_id: null,
+    });
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: cp.id, color: cp.custom_color, level: cp.custom_level,
+        is_cleared: cp.is_cleared, attempts: cp.attempts, ar_route_id: null, ar_route: null,
+      },
+      message: '항목이 추가되었습니다.',
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/climb-logs/:logId/problems/:cpId/video  (multipart `video`)
+ * 기존 항목에 영상 업로드 (또는 교체). 기존 ar_route_id는 새 ArRoute로 덮어쓰기.
+ */
+async function uploadProblemVideo(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ success: false, data: null, message: '영상 파일이 필요합니다.' });
+    }
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+
+    let color = cp.custom_color, level = cp.custom_level;
+    if (cp.problem_id) {
+      const p = await Problem.findByPk(cp.problem_id, { attributes: ['color', 'level'] });
+      if (p) { color = p.color; level = p.level; }
+    }
+    const video_url = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
+    const ar = await ArRoute.create({
+      user_id: userId,
+      problem_id: cp.problem_id || null,
+      title: fmtRouteTitle({ color, level }),
+      description: null,
+      video_url,
+      tags: null,
+    });
+    await cp.update({ ar_route_id: ar.id });
+
+    attachThumbnailAsync({
+      ArRoute, arRouteId: ar.id, videoFilePath: req.file.path, videoFilename: req.file.filename,
+    });
+
+    return res.json({
+      success: true,
+      data: { ar_route: { id: ar.id, title: ar.title, video_url: ar.video_url, thumbnail_url: null } },
+      message: '영상이 업로드되었습니다.',
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * DELETE /api/climb-logs/:logId/problems/:cpId/video
+ * 항목의 영상 연결 해제 (ar_route_id = null). 영상 자체는 삭제하지 않음.
+ */
+async function removeProblemVideo(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId } = req.params;
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    await cp.update({ ar_route_id: null });
+    return res.json({ success: true, data: null, message: '영상 연결이 해제되었습니다.' });
+  } catch (err) { next(err); }
+}
+
+/**
  * DELETE /api/climb-logs/:id
  * 기록 삭제 (본인 소유 검증)
  */
@@ -235,4 +512,83 @@ async function deleteLog(req, res, next) {
   }
 }
 
-module.exports = { getLogDates, getLogsByDate, createLog, deleteLog };
+// GET /api/climb-logs/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+// 사용자별 기간 내 방문 일자 + 완등 항목(색상·V등급) 집계
+async function getSummary(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+    if (!from || !to) {
+      return res.status(400).json({ success: false, message: 'from, to 파라미터가 필요합니다.', data: null });
+    }
+    const logs = await ClimbLog.findAll({
+      where: { user_id: userId, visited_at: { [Op.between]: [from, to] } },
+      include: [{
+        model: ClimbLogProblem, as: 'problems',
+        attributes: ['id', 'is_cleared', 'attempts'],
+        include: [{ model: Problem, as: 'problem', attributes: ['color', 'level'] }],
+      }],
+      order: [['visited_at', 'ASC']],
+    });
+
+    const dates = [...new Set(logs.map((l) => l.visited_at))];
+    const clearedByLevel = {};
+    const clearedByColorLevel = {};
+    let totalCleared = 0;
+    logs.forEach((l) => {
+      (l.problems || []).forEach((cp) => {
+        if (!cp.is_cleared) return;
+        totalCleared++;
+        const lv = cp.problem?.level || '미지정';
+        const color = cp.problem?.color || 'unknown';
+        clearedByLevel[lv] = (clearedByLevel[lv] || 0) + 1;
+        const key = `${color}|${lv}`;
+        clearedByColorLevel[key] = (clearedByColorLevel[key] || 0) + 1;
+      });
+    });
+
+    const breakdown = Object.entries(clearedByColorLevel).map(([k, count]) => {
+      const [color, level] = k.split('|');
+      return { color, level, count };
+    }).sort((a, b) => {
+      const ln = (lv) => parseInt(String(lv).replace(/\D/g, ''), 10) || 0;
+      return ln(a.level) - ln(b.level);
+    });
+
+    // 훈련 세션 카테고리별 카운트
+    const trainingByCategory = { bouldering: 0, endurance: 0, conditioning: 0 };
+    try {
+      const tsessions = await TrainingSession.findAll({
+        where: { user_id: userId, session_date: { [Op.between]: [from, to] } },
+        attributes: ['category'],
+      });
+      tsessions.forEach((t) => {
+        const c = t.category;
+        if (c) trainingByCategory[c] = (trainingByCategory[c] || 0) + 1;
+      });
+    } catch {}
+
+    res.json({
+      success: true,
+      data: {
+        visits: dates.length,
+        dates,
+        total_cleared: totalCleared,
+        cleared_by_level: clearedByLevel,
+        cleared_breakdown: breakdown,
+        training_by_category: trainingByCategory,
+      },
+      message: null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  getLogDates, getLogsByDate, getLogById, createLog, updateLog, deleteLog,
+  updateLogProblem, deleteLogProblem,
+  addLogProblem,
+  uploadProblemVideo, removeProblemVideo,
+  getSummary,
+};

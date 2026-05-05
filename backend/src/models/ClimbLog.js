@@ -34,6 +34,11 @@ const ClimbLog = sequelize.define('ClimbLog', {
     defaultValue: false,
     comment: '일일이용권 사용 시 true (gym_pass_id와 XOR)',
   },
+  duration_minutes: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: true,
+    comment: '운동 시간(분)',
+  },
 }, {
   tableName: 'climb_logs',
   timestamps: true,

@@ -19,13 +19,13 @@ async function listGoals(req, res, next) {
 
 async function createGoal(req, res, next) {
   try {
-    const { title, description, category, metric_label, target_value, current_value, target_date, progress_percent } = req.body;
+    const { title, description, category, metric_label, current_metric_label, target_value, current_value, target_date, progress_percent } = req.body;
     if (!title || !category) {
       return res.status(400).json({ success: false, message: 'title과 category 필수', data: null });
     }
     const goal = await TrainingGoal.create({
       user_id: req.user.id,
-      title, description, category, metric_label,
+      title, description, category, metric_label, current_metric_label,
       target_value, current_value, target_date,
       progress_percent: progress_percent || 0,
     });
@@ -40,7 +40,7 @@ async function updateGoal(req, res, next) {
     if (Number(goal.user_id) !== Number(req.user.id))
       return res.status(403).json({ success: false, message: '권한 없음', data: null });
 
-    const updatable = ['title','description','category','metric_label','target_value','current_value','target_date','status','progress_percent'];
+    const updatable = ['title','description','category','metric_label','current_metric_label','target_value','current_value','target_date','status','progress_percent'];
     const updates = {};
     for (const k of updatable) if (req.body[k] !== undefined) updates[k] = req.body[k];
     await goal.update(updates);
@@ -111,14 +111,21 @@ async function listSessions(req, res, next) {
         category: 'bouldering',
         gym_id: cl.gym_id,
         gym_name: cl.gym?.name,
-        duration_minutes: null,
+        duration_minutes: cl.duration_minutes ?? null,
         memo: cl.memo,
+        problems: (cl.problems || []).map((p) => ({
+          id: p.id,
+          color: p.problem?.color || p.custom_color || null,
+          level: p.problem?.level || p.custom_level || null,
+          is_cleared: !!p.is_cleared,
+          attempts: p.attempts,
+        })),
         items: (cl.problems || []).map((p) => ({
           exercise_name: `볼더링 시도 (${p.problem?.color || p.custom_color || '?'}/${p.problem?.level || p.custom_level || '?'})`,
           sets: 1,
           reps_or_seconds: p.attempts,
           metric_unit: 'count',
-          notes: p.is_cleared ? '완등' : '도전중',
+          notes: p.is_cleared ? '완등' : '완등 실패',
         })),
       }));
     }
@@ -170,6 +177,24 @@ async function createSession(req, res, next) {
     }
     const created = await TrainingSession.findByPk(s.id, { include: [{ model: TrainingSessionItem, as: 'items' }] });
     return res.status(201).json({ success: true, data: created, message: '훈련 세션이 등록되었습니다.' });
+  } catch (e) { next(e); }
+}
+
+async function updateSession(req, res, next) {
+  try {
+    const s = await TrainingSession.findByPk(req.params.id);
+    if (!s) return res.status(404).json({ success: false, message: '세션 없음', data: null });
+    if (Number(s.user_id) !== Number(req.user.id))
+      return res.status(403).json({ success: false, message: '권한 없음', data: null });
+
+    const updatable = ['session_date', 'category', 'duration_minutes', 'memo'];
+    const updates = {};
+    for (const k of updatable) if (req.body[k] !== undefined) updates[k] = req.body[k];
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: '수정할 항목이 없습니다.', data: null });
+    }
+    await s.update(updates);
+    return res.json({ success: true, data: s, message: '세션이 수정되었습니다.' });
   } catch (e) { next(e); }
 }
 
@@ -365,7 +390,7 @@ async function listTemplates(req, res, next) {
 
 module.exports = {
   listGoals, createGoal, updateGoal, deleteGoal,
-  listSessions, createSession, deleteSession,
+  listSessions, createSession, updateSession, deleteSession,
   analyze, listAnalyses, getAnalysis, deleteAnalysis,
   listTemplates,
 };

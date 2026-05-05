@@ -11,11 +11,12 @@ const {
   validatePassXor, loadAndValidatePass, decrementCountPassIfNeeded,
   validateArRouteOwnership, validateAttemptsRow,
 } = require('../services/sessionHelpers');
+const { attachThumbnailAsync } = require('../services/thumbnail');
 
 function formatRouteTitle({ color, level }) {
   const COLOR = {
     red: '빨강🔴', orange: '주황🟠', yellow: '노랑🟡', green: '초록🟢',
-    blue: '파랑🔵', navy: '남색🟦', purple: '보라🟣', black: '검정⚫',
+    blue: '파랑🔵', navy: '남색🟦', pink: '핑크🌸', purple: '보라🟣', black: '검정⚫',
     white: '하양⚪', gray: '회색⬛',
   };
   const c = COLOR[color] || (color ? `◯${color}` : '◯');
@@ -27,7 +28,7 @@ async function createSession(req, res, next) {
   const t = await sequelize.transaction();
   try {
     const userId = req.user.id;
-    const { visited_at, gym_id, memo, gym_pass_id, used_day_pass } = req.body;
+    const { visited_at, gym_id, memo, gym_pass_id, used_day_pass, duration_minutes } = req.body;
 
     if (!visited_at || !gym_id) {
       await t.rollback();
@@ -74,6 +75,7 @@ async function createSession(req, res, next) {
       gym_id, visited_at, memo: memo || null,
       gym_pass_id: gym_pass_id || null,
       used_day_pass: !!(used_day_pass === true || used_day_pass === 'true'),
+      duration_minutes: duration_minutes !== undefined && duration_minutes !== '' ? Number(duration_minutes) : null,
     }, { transaction: t });
 
     // (2) 횟수권 차감
@@ -86,6 +88,7 @@ async function createSession(req, res, next) {
       return acc;
     }, {});
     const arRouteIds = [];
+    const pendingThumbnails = [];
 
     for (let i = 0; i < attempts.length; i++) {
       const row = attempts[i];
@@ -136,6 +139,7 @@ async function createSession(req, res, next) {
         }, { transaction: t });
         arRouteId = ar.id;
         arRouteIds.push(ar.id);
+        pendingThumbnails.push({ arRouteId: ar.id, videoFilePath: file.path, videoFilename: file.filename });
       } else if (row.video_mode === 'link' && row.ar_route_id) {
         try {
           await validateArRouteOwnership(row.ar_route_id, userId, gym_id, t);
@@ -187,6 +191,11 @@ async function createSession(req, res, next) {
     }
 
     await t.commit();
+
+    // commit 이후 비차단 썸네일 추출
+    for (const p of pendingThumbnails) {
+      attachThumbnailAsync({ ArRoute, ...p });
+    }
 
     let remaining = null;
     if (pass) {

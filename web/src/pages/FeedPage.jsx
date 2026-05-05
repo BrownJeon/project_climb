@@ -4,6 +4,27 @@ import RouteCard from '../components/RouteCard';
 import { Chip } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import { routesApi } from '../api/routes';
+import { climbLogsApi } from '../api/climbLogs';
+import { colorMeta } from '../utils/colors';
+
+// 이번 주 월요일~일요일 (KST 기준)
+function getWeekRange(now = new Date()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  const dow = d.getDay(); // 0=일, 1=월
+  const monOffset = dow === 0 ? -6 : 1 - dow;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + monOffset);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const iso = (x) => {
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, '0');
+    const dd = String(x.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+  return { from: iso(mon), to: iso(sun), monday: mon };
+}
 
 const FILTERS = [
   ['all',    '전체'],
@@ -34,6 +55,8 @@ export default function FeedPage() {
   const [filter, setFilter] = useState('all');
   const [allRoutes, setAllRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({ visits: 0, dates: [], total_cleared: 0, cleared_breakdown: [], training_by_category: {} });
+  const week = useMemo(() => getWeekRange(), []);
 
   useEffect(() => {
     setLoading(true);
@@ -41,6 +64,12 @@ export default function FeedPage() {
       .then((r) => setAllRoutes(r.data?.routes || []))
       .finally(() => setLoading(false));
   }, [tab]);
+
+  useEffect(() => {
+    climbLogsApi.summary(week.from, week.to)
+      .then((r) => setSummary(r.data || { visits: 0, dates: [], total_cleared: 0, cleared_breakdown: [], training_by_category: {} }))
+      .catch(() => {});
+  }, [week.from, week.to]);
 
   const routes = useMemo(() => {
     const flat = allRoutes.map((r) => ({
@@ -56,28 +85,18 @@ export default function FeedPage() {
     return filterRoutes(flat, filter);
   }, [allRoutes, filter]);
 
-  const stats = useMemo(() => {
-    // 이번 주 통계 — mock 형태로 routes에서 derive
-    const week = Date.now() - 7 * 86400 * 1000;
-    const recent = allRoutes.filter((r) => new Date(r.created_at || r.date).getTime() >= week);
-    const cleared = recent.filter((r) => r.cleared).length;
-    const visits = new Set(recent.map((r) => (r.created_at || r.date).slice(0, 10))).size;
-    return { cleared, visits };
-  }, [allRoutes]);
-
   const dayCells = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const start = new Date(today);
-    start.setDate(today.getDate() - 6); // 7일 (월~일 가장 가까운 형태)
-    const set = new Set(allRoutes.map((r) => (r.created_at || r.date || '').slice(0, 10)));
-    const labels = ['일', '월', '화', '수', '목', '금', '토'];
+    const set = new Set(summary.dates || []);
+    const labels = ['월', '화', '수', '목', '금', '토', '일'];
     return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start); d.setDate(start.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      return { label: labels[d.getDay()], active: set.has(iso) };
+      const d = new Date(week.monday); d.setDate(week.monday.getDate() + i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const iso = `${y}-${m}-${dd}`;
+      return { label: labels[i], active: set.has(iso) };
     });
-  }, [allRoutes]);
+  }, [summary.dates, week.monday]);
 
   return (
     <>
@@ -92,14 +111,22 @@ export default function FeedPage() {
           background: 'linear-gradient(135deg, var(--primary) 0%, oklch(58% 0.18 28) 100%)',
           color: '#fff', borderRadius: 'var(--r-md)', padding: '16px 18px',
         }}>
-          <div style={{ fontSize: 11, opacity: .85, fontWeight: 600, letterSpacing: .4 }}>이번 주</div>
+          <div style={{ fontSize: 11, opacity: .85, fontWeight: 600, letterSpacing: .4 }}>
+            이번 주 ({week.from.slice(5)} ~ {week.to.slice(5)})
+          </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-            <span className="tabnum" style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1 }}>{stats.cleared}</span>
-            <span style={{ fontSize: 13, opacity: .9 }}>완등</span>
-            <span style={{ margin: '0 6px', opacity: .4 }}>·</span>
-            <span className="tabnum" style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1 }}>{stats.visits}</span>
+            <span className="tabnum" style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1 }}>{summary.visits}</span>
             <span style={{ fontSize: 13, opacity: .9 }}>방문</span>
           </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 12, opacity: .92, flexWrap: 'wrap' }}>
+            <span>볼더링 <span className="tabnum" style={{ fontWeight: 700 }}>{summary.training_by_category?.bouldering ?? 0}</span></span>
+            <span style={{ opacity: .5 }}>/</span>
+            <span>지구력 <span className="tabnum" style={{ fontWeight: 700 }}>{summary.training_by_category?.endurance ?? 0}</span></span>
+            <span style={{ opacity: .5 }}>/</span>
+            <span>컨디셔닝 <span className="tabnum" style={{ fontWeight: 700 }}>{summary.training_by_category?.conditioning ?? 0}</span></span>
+          </div>
+
           <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
             {dayCells.map((d, i) => (
               <div key={i} style={{ flex: 1 }}>

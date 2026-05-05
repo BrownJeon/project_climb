@@ -43,7 +43,16 @@ async function listPasses(req, res, next) {
     const { status = 'all', gym_id, pass_type } = req.query;
 
     const where = { user_id: userId };
-    if (gym_id) where.gym_id = gym_id;
+    // gym_id 필터는 해당 gym의 brand에 해당하는 모든 이용권을 검색 (브랜드 기준)
+    if (gym_id) {
+      const targetGym = await Gym.findByPk(gym_id, { attributes: ['brand', 'name'] });
+      const targetBrand = targetGym?.brand || targetGym?.name;
+      if (targetBrand) {
+        where.brand = targetBrand;
+      } else {
+        where.gym_id = gym_id; // fallback
+      }
+    }
     if (pass_type) where.pass_type = pass_type;
 
     const passes = await GymPass.findAll({
@@ -130,7 +139,7 @@ async function createPass(req, res, next) {
       return res.status(404).json({ success: false, data: null, message: '암장을 찾을 수 없습니다.' });
     }
 
-    const passData = { user_id: userId, gym_id, pass_type, label };
+    const passData = { user_id: userId, gym_id, brand: gym.brand || gym.name, pass_type, label };
     if (pass_type === 'period') {
       passData.start_date = start_date;
       passData.end_date = end_date;
@@ -238,4 +247,61 @@ async function deletePass(req, res, next) {
   }
 }
 
-module.exports = { listPasses, createPass, usePass, deletePass };
+/**
+ * PATCH /api/passes/:id
+ * 이용권 수정 (label, 정기권 날짜, 횟수권 잔여/총 횟수·만료일)
+ */
+async function updatePass(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const pass = await GymPass.findByPk(id);
+    if (!pass) {
+      return res.status(404).json({ success: false, data: null, message: '이용권을 찾을 수 없습니다.' });
+    }
+    if (Number(pass.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한이 없습니다.' });
+    }
+
+    const updates = {};
+    const { label, start_date, end_date, total_count, remaining_count, is_active } = req.body;
+
+    if (label !== undefined) updates.label = label || null;
+    if (is_active !== undefined) updates.is_active = !!is_active;
+
+    if (pass.pass_type === 'period') {
+      if (start_date !== undefined) updates.start_date = start_date;
+      if (end_date !== undefined) updates.end_date = end_date;
+    } else {
+      if (total_count !== undefined) {
+        const tc = Number(total_count);
+        if (!Number.isFinite(tc) || tc < 1) {
+          return res.status(400).json({ success: false, data: null, message: '총 횟수는 1 이상이어야 합니다.' });
+        }
+        updates.total_count = tc;
+      }
+      if (remaining_count !== undefined) {
+        const rc = Number(remaining_count);
+        if (!Number.isFinite(rc) || rc < 0) {
+          return res.status(400).json({ success: false, data: null, message: '잔여 횟수는 0 이상이어야 합니다.' });
+        }
+        const max = updates.total_count ?? pass.total_count;
+        if (rc > max) {
+          return res.status(400).json({ success: false, data: null, message: '잔여 횟수가 총 횟수를 초과할 수 없습니다.' });
+        }
+        updates.remaining_count = rc;
+      }
+      if (end_date !== undefined) {
+        updates.end_date = end_date || null;
+      }
+    }
+
+    await pass.update(updates);
+    return res.json({ success: true, data: pass, message: '이용권이 수정되었습니다.' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listPasses, createPass, usePass, deletePass, updatePass };

@@ -13,6 +13,7 @@ router.delete('/goals/:id', optionalAuth, c.deleteGoal);
 // 훈련 세션 (자동 합성 포함)
 router.get('/sessions', optionalAuth, c.listSessions);
 router.post('/sessions', optionalAuth, c.createSession);          // 호환용 (deprecated)
+router.patch('/sessions/:id', optionalAuth, c.updateSession);
 router.delete('/sessions/:id', optionalAuth, c.deleteSession);
 
 // 분석 (Claude CLI 2단계)

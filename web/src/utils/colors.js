@@ -6,6 +6,7 @@ export const COLORS = {
   green:  { dot: '#4aa760', label: '초록', kr: '🟢' },
   blue:   { dot: '#4a86e8', label: '파랑', kr: '🔵' },
   navy:   { dot: '#2b3e7a', label: '남색', kr: '🟦' },
+  pink:   { dot: '#e88ab8', label: '핑크', kr: '🌸' },
   purple: { dot: '#8b5cb8', label: '보라', kr: '🟣' },
   black:  { dot: '#1a1a1a', label: '검정', kr: '⚫' },
   white:  { dot: '#f7f7f5', label: '흰색', kr: '⚪' },

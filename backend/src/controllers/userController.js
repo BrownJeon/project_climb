@@ -1,4 +1,22 @@
-const { User, Follow, ArRoute, Gym, UserMainGym, sequelize } = require('../models');
+const { User, Follow, ArRoute, Gym, Problem, UserMainGym, ClimbLogProblem, sequelize } = require('../models');
+
+// helper: route 객체에 climb_attempts에서 cleared/attempts 평탄화
+function attachAttemptSummary(routes) {
+  return routes.map((r) => {
+    const json = typeof r.toJSON === 'function' ? r.toJSON() : { ...r };
+    const attempts = json.climb_attempts || [];
+    let cleared = null;
+    let attemptCount = null;
+    if (attempts.length) {
+      cleared = attempts.some((a) => a.is_cleared);
+      attemptCount = attempts.reduce((s, a) => s + (a.attempts || 0), 0) || null;
+    }
+    json.cleared = cleared;
+    json.attempts = attemptCount;
+    delete json.climb_attempts;
+    return json;
+  });
+}
 
 // GET /api/users/:id  (id='me' 가능)
 async function getProfile(req, res, next) {
@@ -180,12 +198,25 @@ async function getMyRoutes(req, res, next) {
       limit,
       offset,
       order: [['created_at', 'DESC']],
+      distinct: true,
+      include: [
+        {
+          model: Problem, as: 'problem',
+          attributes: ['id', 'color', 'level', 'gym_id'],
+          include: [{ model: Gym, as: 'gym', attributes: ['id', 'name'] }],
+        },
+        {
+          model: ClimbLogProblem, as: 'climb_attempts',
+          attributes: ['id', 'is_cleared', 'attempts'],
+          required: false,
+        },
+      ],
     });
 
     return res.json({
       success: true,
       message: null,
-      data: { total: count, page, routes: rows },
+      data: { total: count, page, routes: attachAttemptSummary(rows) },
     });
   } catch (err) {
     next(err);
@@ -205,9 +236,21 @@ async function getMyBookmarks(req, res, next) {
       offset,
       order: [['created_at', 'DESC']],
       joinTableAttributes: [],
+      include: [
+        {
+          model: Problem, as: 'problem',
+          attributes: ['id', 'color', 'level', 'gym_id'],
+          include: [{ model: Gym, as: 'gym', attributes: ['id', 'name'] }],
+        },
+        {
+          model: ClimbLogProblem, as: 'climb_attempts',
+          attributes: ['id', 'is_cleared', 'attempts'],
+          required: false,
+        },
+      ],
     });
 
-    return res.json({ success: true, message: null, data: { routes } });
+    return res.json({ success: true, message: null, data: { routes: attachAttemptSummary(routes) } });
   } catch (err) {
     next(err);
   }

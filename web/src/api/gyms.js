@@ -6,4 +6,6 @@ export const gymsApi = {
   problems: (id, params = {}) => client.get(`/gyms/${id}/problems`, { params }),
   addProblem: (id, body) => client.post(`/gyms/${id}/problems`, body),
   create: (body) => client.post('/gyms', body),
+  update: (id, body) => client.patch(`/gyms/${id}`, body),
+  remove: (id) => client.delete(`/gyms/${id}`),
 };

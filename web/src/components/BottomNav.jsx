@@ -3,13 +3,12 @@ import { I } from './atoms/Icons';
 import { useSessionAddModal } from '../contexts/SessionAddModalContext';
 
 /**
- * BottomNav — handoff 디자인 1:1
- *  - 5탭: 홈 / 기록(=/gyms) / [+ FAB] / 훈련 / 캘린더
- *  - position fixed bottom, padding 8/8/28, surface bg, 1px top line
- *  - FAB: 52x52 원형, primary, 위로 -22px 튀어나옴, 그림자
+ * BottomNav
+ *  - 홈 메뉴 자리에 마이페이지 배치 (홈 라우팅은 좌상단 TheRoute 브랜드)
+ *  - 5탭: 마이 / 기록(=/gyms) / [+ FAB] / 훈련 / 캘린더
  */
 const SLOTS = [
-  { key: 'home',     to: '/',         label: '홈',     icon: () => I.home(22),     match: (p) => p === '/' },
+  { key: 'me',       to: '/me',       label: '마이',   icon: () => I.user(22),     match: (p) => p.startsWith('/me') },
   { key: 'gyms',     to: '/gyms',     label: '기록',   icon: () => I.map(22),      match: (p) => p.startsWith('/gyms') },
   { key: 'add',      fab: true,       label: '',       icon: () => I.plus(22) },
   { key: 'training', to: '/training', label: '훈련',   icon: () => I.dumbbell(22), match: (p) => p.startsWith('/training') },

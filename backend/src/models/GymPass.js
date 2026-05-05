@@ -13,7 +13,13 @@ const GymPass = sequelize.define('GymPass', {
   },
   gym_id: {
     type: DataTypes.BIGINT.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
+    comment: '등록 시점 대표 지점 (브랜드 추적용 보조)',
+  },
+  brand: {
+    type: DataTypes.STRING(80),
+    allowNull: true,
+    comment: '이용권이 적용되는 브랜드명 — 같은 brand의 모든 지점에서 사용 가능',
   },
   pass_type: {
     type: DataTypes.ENUM('period', 'count'),

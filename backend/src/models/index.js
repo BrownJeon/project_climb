@@ -119,6 +119,7 @@ ClimbLog.belongsTo(GymPass, { foreignKey: 'gym_pass_id', as: 'gym_pass' });
 
 // ClimbLogProblem - ArRoute (영상 연결)
 ClimbLogProblem.belongsTo(ArRoute, { foreignKey: 'ar_route_id', as: 'ar_route' });
+ArRoute.hasMany(ClimbLogProblem, { foreignKey: 'ar_route_id', as: 'climb_attempts' });
 
 // 훈련 도메인
 User.hasMany(TrainingGoal, { foreignKey: 'user_id' });

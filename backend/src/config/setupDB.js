@@ -72,6 +72,20 @@ async function seedDefaultUser() {
 // Phase 2 — 신규 컬럼·테이블
 // ─────────────────────────────────────────────────────────────
 async function ensureColumns() {
+  // gyms
+  await addColumnIfMissing('gyms', 'brand', 'brand VARCHAR(80) NULL');
+  await addColumnIfMissing('gyms', 'branch', 'branch VARCHAR(80) NULL');
+
+  // gym_passes
+  await addColumnIfMissing('gym_passes', 'brand', 'brand VARCHAR(80) NULL');
+
+  // training_goals — 현재 난이도(문자열) 슬롯 (지구력 5.x, 향후 볼더링 등에서도 활용 가능)
+  await addColumnIfMissing(
+    'training_goals',
+    'current_metric_label',
+    "current_metric_label VARCHAR(40) NULL COMMENT '현재 난이도/측정 라벨'"
+  );
+
   // ar_routes
   await addColumnIfMissing('ar_routes', 'tags', 'tags JSON NULL');
 
@@ -97,6 +111,11 @@ async function ensureColumns() {
     'climb_logs',
     'used_day_pass',
     'used_day_pass BOOLEAN NOT NULL DEFAULT 0'
+  );
+  await addColumnIfMissing(
+    'climb_logs',
+    'duration_minutes',
+    "duration_minutes INT UNSIGNED NULL COMMENT '운동 시간(분)'"
   );
 
   // users
@@ -218,8 +237,48 @@ async function createTablesIfNeeded() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Phase 2.5 — utf8mb3 → utf8mb4 멱등 변환 (이모지 지원)
+// ar_routes.title이 formatRouteTitle()의 이모지(🟡 등 4바이트)를 받기 위해 필요.
+// 이미 utf8mb4면 SKIP. NAS ALTER가 느리므로 collation 검사로 1회만 실행.
+// ─────────────────────────────────────────────────────────────
+async function ensureUtf8mb4() {
+  const [rows] = await sequelize.query(
+    `SELECT TABLE_NAME FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = :db AND TABLE_COLLATION LIKE 'utf8mb3%'`,
+    { replacements: { db: DB_NAME } }
+  );
+  if (rows.length === 0) return;
+  console.log(`[setupDB] utf8mb4 변환 시작: ${rows.length}개 테이블`);
+  for (const { TABLE_NAME } of rows) {
+    await sequelize.query(
+      `ALTER TABLE \`${TABLE_NAME}\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+    );
+    console.log(`[setupDB]   ✓ ${TABLE_NAME}`);
+  }
+  // DB 디폴트도 변경 (이후 신규 테이블 자동 utf8mb4)
+  await sequelize.query(
+    `ALTER DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+  );
+  console.log('[setupDB] utf8mb4 변환 완료');
+}
+
+// ─────────────────────────────────────────────────────────────
 // Phase 2 — 데이터 백필
 // ─────────────────────────────────────────────────────────────
+async function migrateGymBrand() {
+  // 기존 gyms는 name을 brand로 1회 복사 (branch는 NULL 유지)
+  await sequelize.query(
+    `UPDATE gyms SET brand = name WHERE brand IS NULL OR brand = ''`
+  );
+  // gym_passes.brand 백필 — gym.brand에서 추출
+  await sequelize.query(
+    `UPDATE gym_passes gp
+        JOIN gyms g ON g.id = gp.gym_id
+        SET gp.brand = g.brand
+      WHERE (gp.brand IS NULL OR gp.brand = '') AND g.brand IS NOT NULL`
+  );
+}
+
 async function migrateMaxLevel() {
   // 기존 max_level 값을 max_level_grade로 1회 복사
   await sequelize.query(
@@ -298,6 +357,8 @@ async function setupDB() {
   // Phase 2
   await ensureColumns();
   await createTablesIfNeeded();
+  await ensureUtf8mb4();
+  await migrateGymBrand();
   await migrateMaxLevel();
   await migrateMainGym();
   await seedPromptTemplate();

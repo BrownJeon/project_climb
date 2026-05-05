@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ColorBadge, Pill } from '../components/atoms';
+import TopBar from '../components/TopBar';
+import { Btn, ColorBadge, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import RouteCard from '../components/RouteCard';
+import RouteEditModal from '../components/modals/RouteEditModal';
 import { routesApi } from '../api/routes';
 import { fmtRouteTitle, colorMeta } from '../utils/colors';
 
@@ -13,6 +15,7 @@ export default function RouteDetailPage() {
   const [comments, setComments] = useState([]);
   const [comment, setComment] = useState('');
   const [others, setOthers] = useState([]);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     routesApi.get(id).then((r) => {
@@ -32,14 +35,18 @@ export default function RouteDetailPage() {
 
   if (route === null) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-3)' }}>
-        영상을 찾을 수 없거나 불러오는 중...
-      </div>
+      <>
+        <TopBar />
+        <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-3)' }}>
+          영상을 찾을 수 없거나 불러오는 중...
+        </div>
+      </>
     );
   }
 
   const meta = colorMeta(route.problem?.color || route.color);
-  const title = fmtRouteTitle(route.problem?.color || route.color, route.problem?.level || route.level);
+  const autoTitle = fmtRouteTitle(route.problem?.color || route.color, route.problem?.level || route.level);
+  const title = route.title?.trim() ? route.title : autoTitle;
   const dot = meta.dot;
   const cleared = route.cleared ?? null;
   const attempts = route.attempts ?? null;
@@ -74,25 +81,20 @@ export default function RouteDetailPage() {
 
   return (
     <>
-      {/* Video block — handoff hi-fi 디자인 */}
+      <TopBar right={
+        <button onClick={() => nav(-1)} aria-label="뒤로" style={{
+          width: 36, height: 36, borderRadius: 'var(--r-pill)',
+          background: 'var(--surface-2)', color: 'var(--ink-2)',
+          display: 'grid', placeItems: 'center',
+        }}>{I.chev(16, 'left')}</button>
+      } />
+
+      {/* Video block — handoff hi-fi 디자인 (90% 폭 가운데 정렬) */}
       <div style={{
         position: 'relative', aspectRatio: '9 / 13.5',
         background: `linear-gradient(160deg, ${dot}55, ${dot}aa)`,
+        width: '90%', margin: '12px auto 0', borderRadius: 'var(--r-md)', overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', top: 14, left: 14 }}>
-          <button onClick={() => nav(-1)} aria-label="뒤로" style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(8px)',
-            color: '#fff', display: 'grid', placeItems: 'center',
-          }}>{I.chev(16, 'left')}</button>
-        </div>
-        <div style={{ position: 'absolute', top: 14, right: 14 }}>
-          <button aria-label="더보기" style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(8px)',
-            color: '#fff', display: 'grid', placeItems: 'center',
-          }}>{I.more(18)}</button>
-        </div>
 
         {/* 가짜 holds (영상 미리보기 placeholder) */}
         {[[20, 30, 12], [40, 55, 16], [55, 42, 12], [70, 28, 14], [78, 55, 12]].map(([t, l, s], i) => (
@@ -109,8 +111,12 @@ export default function RouteDetailPage() {
             src={route.video_url}
             controls
             playsInline
+            preload="metadata"
+            poster={route.thumbnail_url || undefined}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'transparent', zIndex: 1 }}
-          />
+          >
+            <source src={route.video_url} type="video/mp4" />
+          </video>
         )}
         {!route.video_url && (
           <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
@@ -133,7 +139,23 @@ export default function RouteDetailPage() {
             </Pill>
           )}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, flex: 1, minWidth: 0 }}>{title}</div>
+          {route.user_id === 1 && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => setEditOpen(true)} style={{
+                fontSize: 12, fontWeight: 600, color: 'var(--ink-2)',
+                padding: '5px 10px', borderRadius: 'var(--r-pill)',
+                border: '1px solid var(--line-2)', background: 'var(--surface)',
+              }}>수정</button>
+              <button onClick={removeSelf} style={{
+                fontSize: 12, fontWeight: 600, color: 'var(--danger)',
+                padding: '5px 10px', borderRadius: 'var(--r-pill)',
+                border: '1px solid var(--line-2)', background: 'var(--surface)',
+              }}>삭제</button>
+            </div>
+          )}
+        </div>
         <div style={{ fontSize: 13, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 5 }}>
           {I.pin(13)} {route.problem?.gym?.name || '암장 미지정'}
           {' · '}
@@ -185,10 +207,9 @@ export default function RouteDetailPage() {
       <div style={{ padding: '14px 16px', background: 'var(--surface)', marginTop: 8, borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, letterSpacing: .4 }}>댓글 ({comments.length})</div>
         {comments.map((c) => (
-          <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
-            <strong style={{ marginRight: 6 }}>{c.author?.nickname || '?'}</strong>
-            <span style={{ color: 'var(--ink-2)' }}>{c.content}</span>
-          </div>
+          <CommentRow key={c.id} comment={c} routeId={id}
+            onChanged={() => routesApi.comments(id).then((r) => setComments(r.data?.comments || [])).catch(() => {})}
+          />
         ))}
         <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
           <input
@@ -224,16 +245,87 @@ export default function RouteDetailPage() {
         </div>
       )}
 
-      {/* 본인 영상이면 삭제 옵션 */}
-      {route.user_id === 1 && (
-        <div style={{ padding: '14px 16px' }}>
-          <button onClick={removeSelf} style={{
-            width: '100%', height: 42, borderRadius: 'var(--r-sm)',
-            border: '1px solid var(--line-2)', background: 'transparent',
-            color: 'var(--danger)', fontSize: 13, fontWeight: 600,
-          }}>영상 삭제</button>
-        </div>
+      {editOpen && (
+        <RouteEditModal
+          route={route}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => {
+            // 강제 재조회로 모든 필드 정확히 갱신 (problem/tags getter 포함)
+            routesApi.get(id).then((r) => setRoute(r.data)).catch(() => {});
+          }}
+        />
       )}
     </>
+  );
+}
+
+function CommentRow({ comment, routeId, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.content);
+  const [busy, setBusy] = useState(false);
+  const isMine = Number(comment.user_id) === 1; // 디폴트 사용자 id=1
+
+  async function save() {
+    if (!draft.trim() || busy) return;
+    setBusy(true);
+    try {
+      await routesApi.updateComment(routeId, comment.id, draft.trim());
+      setEditing(false);
+      onChanged?.();
+    } catch (e) {
+      alert(e?.response?.data?.message || '수정 실패');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    if (!confirm('댓글을 삭제할까요?')) return;
+    setBusy(true);
+    try {
+      await routesApi.deleteComment(routeId, comment.id);
+      onChanged?.();
+    } catch (e) {
+      alert(e?.response?.data?.message || '삭제 실패');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: editing ? 6 : 0 }}>
+        <strong>{comment.author?.nickname || '?'}</strong>
+        {!editing && <span style={{ color: 'var(--ink-2)', flex: 1 }}>{comment.content}</span>}
+        {isMine && !editing && (
+          <span style={{ display: 'inline-flex', gap: 6, marginLeft: 'auto' }}>
+            <button onClick={() => { setDraft(comment.content); setEditing(true); }}
+              style={{ fontSize: 11, color: 'var(--ink-3)', padding: 4 }}>수정</button>
+            <button onClick={remove} disabled={busy}
+              style={{ fontSize: 11, color: 'var(--danger)', padding: 4 }}>삭제</button>
+          </span>
+        )}
+      </div>
+      {editing && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input value={draft} onChange={(e) => setDraft(e.target.value)}
+            style={{
+              flex: 1, padding: '6px 10px', borderRadius: 'var(--r-sm)',
+              border: '1px solid var(--line)', background: 'var(--surface-2)',
+              fontSize: 13,
+            }} />
+          <button onClick={save} disabled={!draft.trim() || busy}
+            style={{
+              padding: '6px 10px', borderRadius: 'var(--r-sm)',
+              background: 'var(--primary)', color: '#fff', fontSize: 12, fontWeight: 600,
+            }}>저장</button>
+          <button onClick={() => setEditing(false)} disabled={busy}
+            style={{
+              padding: '6px 10px', borderRadius: 'var(--r-sm)',
+              border: '1px solid var(--line-2)', background: 'transparent',
+              color: 'var(--ink-3)', fontSize: 12, fontWeight: 600,
+            }}>취소</button>
+        </div>
+      )}
+    </div>
   );
 }

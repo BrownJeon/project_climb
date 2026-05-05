@@ -117,6 +117,17 @@ export const I = {
       <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   ),
+  pencil: (s = 14) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M14 6l4 4" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  ),
+  trash: (s = 14) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <path d="M4 7h16M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
   flame: (s = 14) => (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
       <path d="M12 3c2 4 5 5 5 9a5 5 0 11-10 0c0-2 1-3 2-4-1 4 2 4 2 4s-2-3 1-9z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
