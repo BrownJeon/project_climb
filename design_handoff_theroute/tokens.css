@@ -1,0 +1,73 @@
+/* TheRoute — design tokens */
+:root{
+  /* warm neutrals */
+  --bg: #f6f5f3;
+  --surface: #ffffff;
+  --surface-2: #faf9f7;
+  --ink-1: #131313;
+  --ink-2: #3a3a39;
+  --ink-3: #6b6b68;
+  --ink-4: #9a9a96;
+  --line: #ececea;
+  --line-2: #e0dfdb;
+
+  /* primary — climbing-hold orange, slightly desaturated */
+  --primary: oklch(67% 0.18 38);     /* ~ #ff6b3a */
+  --primary-ink: oklch(46% 0.16 38);
+  --primary-soft: oklch(96% 0.04 38);
+  --primary-line: oklch(88% 0.08 38);
+
+  /* semantic */
+  --success: oklch(64% 0.15 155);
+  --warn:    oklch(72% 0.16 75);
+  --danger:  oklch(60% 0.20 25);
+
+  /* climbing color dots */
+  --c-red:    #e84a4a;
+  --c-orange: #f08736;
+  --c-yellow: #f3c94a;
+  --c-green:  #4aa760;
+  --c-blue:   #4a86e8;
+  --c-navy:   #2b3e7a;
+  --c-purple: #8b5cb8;
+  --c-black:  #1a1a1a;
+  --c-white:  #f7f7f5;
+  --c-gray:   #8c8c88;
+
+  /* radii / shadow */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 0 rgba(15,15,15,.04), 0 1px 3px rgba(15,15,15,.04);
+  --shadow-2: 0 4px 14px rgba(15,15,15,.06);
+  --shadow-3: 0 12px 32px rgba(15,15,15,.10);
+
+  /* type */
+  --font-sans: "Pretendard","Pretendard Variable",-apple-system,system-ui,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+[data-theme="dark"]{
+  --bg: #0e0e0d;
+  --surface: #18181a;
+  --surface-2: #1f1f22;
+  --ink-1: #f1efea;
+  --ink-2: #d2cfc8;
+  --ink-3: #918f88;
+  --ink-4: #5e5d57;
+  --line: #2a2a2c;
+  --line-2: #34343a;
+  --primary-soft: color-mix(in oklch, var(--primary) 14%, #18181a);
+  --primary-line: color-mix(in oklch, var(--primary) 32%, #18181a);
+  --shadow-1: 0 1px 0 rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
+  --shadow-2: 0 4px 14px rgba(0,0,0,.4);
+  --shadow-3: 0 12px 32px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink-1);font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
+input,textarea,select{font-family:inherit;color:inherit}
+.tabnum{font-variant-numeric:tabular-nums}
