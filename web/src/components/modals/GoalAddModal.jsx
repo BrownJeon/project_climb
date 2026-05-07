@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Btn } from '../atoms';
 import { trainingApi } from '../../api/training';
+import { gymsApi } from '../../api/gyms';
 import { COLOR_KEYS, colorMeta } from '../../utils/colors';
 
 const CATEGORIES = [
@@ -15,6 +16,7 @@ const YDS_LEVELS = [
   '5.10a', '5.10b', '5.10c', '5.10d',
   '5.11a', '5.11b', '5.11c', '5.11d',
 ];
+const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
 /**
  * 카테고리별 측정 기준 매핑 (기존 metric_label / target_value / current_value 재사용):
@@ -23,6 +25,14 @@ const YDS_LEVELS = [
  *   컨디셔닝     : metric_label = 트레이닝 종목, target_value = 목표 횟수, current_value = 현재 횟수
  *   기타         : description = 자유 입력
  */
+// 컨디셔닝용: metric_label "푸시업 (회)" → {base:'푸시업', unit:'count'}
+function parseConditioningLabel(label) {
+  if (!label) return { base: '', unit: 'count' };
+  const m = label.match(/^(.*)\s*\((회|초)\)\s*$/);
+  if (m) return { base: m[1].trim(), unit: m[2] === '초' ? 'time' : 'count' };
+  return { base: label, unit: 'count' };
+}
+
 export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
   const isEdit = !!goal;
   const [title, setTitle] = useState(goal?.title || '');
@@ -30,11 +40,54 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
   const [description, setDescription] = useState(goal?.description || '');
   const [metricLabel, setMetricLabel] = useState(goal?.metric_label || '');
   const [currentMetricLabel, setCurrentMetricLabel] = useState(goal?.current_metric_label || '');
-  const [targetValue, setTargetValue] = useState(goal?.target_value ?? '');
-  const [currentValue, setCurrentValue] = useState(goal?.current_value ?? '');
+  // DB DECIMAL → "1.00" 형태로 오므로 정수로 정리
+  const intStr = (v) => (v == null || v === '') ? '' : String(parseInt(v, 10) || 0);
+  const [targetValue, setTargetValue] = useState(intStr(goal?.target_value));
+  const [currentValue, setCurrentValue] = useState(intStr(goal?.current_value));
+  const [startDate, setStartDate] = useState(goal?.start_date || '');
   const [targetDate, setTargetDate] = useState(goal?.target_date || '');
+  // 컨디셔닝 — 측정 단위(count=회, time=초). 종목명은 condBase로 분리 관리.
+  const initCond = goal?.category === 'conditioning'
+    ? parseConditioningLabel(goal?.metric_label)
+    : { base: '', unit: 'count' };
+  const [condBase, setCondBase] = useState(initCond.base);
+  const [condUnit, setCondUnit] = useState(initCond.unit); // 'count' | 'time'
+  const [autoSync, setAutoSync] = useState(goal?.auto_sync !== undefined ? !!goal.auto_sync : true);
+  // 볼더링 — 암장/브랜드/V등급 한정
+  // gymScope: 'all' | 'gym' | 'brand'
+  const initScope = goal?.target_gym_id ? 'gym' : (goal?.target_brand ? 'brand' : 'all');
+  const [gymScope, setGymScope] = useState(initScope);
+  const [targetGymId, setTargetGymId] = useState(goal?.target_gym_id || '');
+  const [targetBrand, setTargetBrand] = useState(goal?.target_brand || '');
+  const [targetLevel, setTargetLevel] = useState(goal?.target_level || '');
+  const [gyms, setGyms] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    gymsApi.list({ limit: 200 }).then((r) => setGyms(r.data?.gyms || [])).catch(() => {});
+  }, []);
+
+  // 자동 제목 제안 — 볼더링 한정
+  function buildSuggestedTitle() {
+    if (category !== 'bouldering') return '';
+    const m = colorMeta(metricLabel);
+    let scope = '';
+    if (gymScope === 'gym' && targetGymId) {
+      const g = gyms.find((x) => String(x.id) === String(targetGymId));
+      if (g) scope = g.name;
+    } else if (gymScope === 'brand' && targetBrand) {
+      scope = targetBrand;
+    }
+    const parts = [];
+    if (scope) parts.push(scope);
+    if (metricLabel) parts.push(`${m.label || metricLabel}${m.kr || ''}`);
+    if (targetLevel) parts.push(targetLevel);
+    if (targetValue) parts.push(`${targetValue}개`);
+    parts.push('클리어');
+    return parts.join(' ');
+  }
+  const brandList = Array.from(new Set(gyms.map((g) => g.brand).filter(Boolean)));
 
   const canSubmit = !!title.trim() && !!category;
 
@@ -45,21 +98,42 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
     setCurrentMetricLabel('');
     setTargetValue('');
     setCurrentValue('');
+    setCondBase('');
+    setCondUnit('count');
+    setGymScope('all');
+    setTargetGymId('');
+    setTargetBrand('');
+    setTargetLevel('');
   }
 
   async function submit() {
     if (!canSubmit || submitting) return;
     setError(null); setSubmitting(true);
     try {
+      // conditioning: 종목 + 단위(회/초) 결합
+      let outMetricLabel = metricLabel.trim() || null;
+      if (category === 'conditioning') {
+        const base = condBase.trim();
+        outMetricLabel = base ? `${base} (${condUnit === 'time' ? '초' : '회'})` : null;
+      }
       const body = {
         title: title.trim(), category,
         description: description.trim() || null,
-        metric_label: metricLabel.trim() || null,
+        metric_label: outMetricLabel,
         current_metric_label: currentMetricLabel.trim() || null,
         target_value: targetValue !== '' && targetValue !== null ? Number(targetValue) : null,
         current_value: currentValue !== '' && currentValue !== null ? Number(currentValue) : null,
+        start_date: startDate || null,
         target_date: targetDate || null,
+        auto_sync: autoSync,
       };
+      if (category === 'bouldering') {
+        body.target_gym_id = gymScope === 'gym' && targetGymId ? Number(targetGymId) : null;
+        body.target_brand = gymScope === 'brand' && targetBrand ? targetBrand : null;
+        body.target_level = targetLevel || null;
+      } else {
+        body.target_gym_id = null; body.target_brand = null; body.target_level = null;
+      }
       const res = isEdit
         ? await trainingApi.updateGoal(goal.id, body)
         : await trainingApi.createGoal(body);
@@ -112,9 +186,66 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
             </select>
           </Field>
 
+          {(category === 'bouldering' || category === 'conditioning') && (
+            <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              padding: '10px 12px', borderRadius: 'var(--r-sm)',
+              border: '1px solid ' + (autoSync ? 'var(--primary-line)' : 'var(--line)'),
+              background: autoSync ? 'var(--primary-soft)' : 'var(--surface)',
+              cursor: 'pointer',
+            }}>
+              <input type="checkbox" checked={autoSync}
+                onChange={(e) => setAutoSync(e.target.checked)}
+                style={{ marginTop: 2 }} />
+              <span style={{ flex: 1, fontSize: 12 }}>
+                <span style={{ fontWeight: 700, color: 'var(--ink-1)' }}>운동 기록 자동 동기화</span>
+                <span style={{ display: 'block', color: 'var(--ink-3)', marginTop: 3, lineHeight: 1.45 }}>
+                  {category === 'bouldering'
+                    ? '같은 색상의 완등 횟수를 자동으로 합산해 진행률을 갱신합니다.'
+                    : '같은 종목·단위의 운동 기록 최대값으로 진행률을 갱신합니다.'}
+                  {' 끄면 [현재 값] 입력만으로 진행률이 계산됩니다.'}
+                </span>
+              </span>
+            </label>
+          )}
+
           {/* 카테고리별 측정 기준 */}
           {category === 'bouldering' && (
             <>
+              <Field label="대상 암장">
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  {[['all', '전체 암장'], ['gym', '특정 지점'], ['brand', '같은 브랜드']].map(([k, l]) => {
+                    const active = gymScope === k;
+                    return (
+                      <button key={k} type="button" onClick={() => setGymScope(k)}
+                        style={{
+                          flex: 1, padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                          border: '1px solid ' + (active ? 'var(--primary)' : 'var(--line-2)'),
+                          background: active ? 'var(--primary-soft)' : 'var(--surface)',
+                          color: active ? 'var(--primary-ink)' : 'var(--ink-2)',
+                          fontWeight: active ? 700 : 500, fontSize: 12,
+                        }}>{l}</button>
+                    );
+                  })}
+                </div>
+                {gymScope === 'gym' && (
+                  <select value={targetGymId} onChange={(e) => setTargetGymId(e.target.value)} style={inputStyle}>
+                    <option value="">암장 선택</option>
+                    {gyms.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.brand || g.name}{g.branch ? ` · ${g.branch}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {gymScope === 'brand' && (
+                  <select value={targetBrand} onChange={(e) => setTargetBrand(e.target.value)} style={inputStyle}>
+                    <option value="">브랜드 선택</option>
+                    {brandList.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                )}
+              </Field>
+
               <Field label="목표 난이도 (색깔)">
                 <select value={metricLabel} onChange={(e) => setMetricLabel(e.target.value)} style={inputStyle}>
                   <option value="">선택</option>
@@ -124,15 +255,43 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
                   })}
                 </select>
               </Field>
+              <Field label="V등급 (선택)">
+                <select value={targetLevel} onChange={(e) => setTargetLevel(e.target.value)} style={inputStyle}>
+                  <option value="">전체</option>
+                  {V_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 4 }}>
+                  비워두면 색상만 매칭. 같은 색상이라도 V등급이 다른 문제는 모두 합산됩니다.
+                </div>
+              </Field>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <Field label="현재 완등 개수">
-                  <input type="number" min="0" value={currentValue}
-                    onChange={(e) => setCurrentValue(e.target.value)} style={inputStyle} />
+                  <input type="number" min="0" step="1" inputMode="numeric" pattern="[0-9]*"
+                    value={currentValue}
+                    onChange={(e) => setCurrentValue(e.target.value.replace(/[^\d]/g, ''))}
+                    style={inputStyle} />
                 </Field>
                 <Field label="목표 완등 개수">
-                  <input type="number" min="0" value={targetValue}
-                    onChange={(e) => setTargetValue(e.target.value)} style={inputStyle} />
+                  <input type="number" min="0" step="1" inputMode="numeric" pattern="[0-9]*"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value.replace(/[^\d]/g, ''))}
+                    style={inputStyle} />
                 </Field>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>제안:</span>
+                <span style={{ fontSize: 12, color: 'var(--ink-1)', fontWeight: 600 }}>
+                  {buildSuggestedTitle()}
+                </span>
+                <button type="button" onClick={() => setTitle(buildSuggestedTitle())}
+                  style={{
+                    marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+                    padding: '4px 9px', borderRadius: 'var(--r-pill)',
+                    border: '1px solid var(--line-2)', background: 'var(--surface)',
+                    color: 'var(--primary)',
+                  }}>제목 자동 채우기</button>
               </div>
             </>
           )}
@@ -156,19 +315,43 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
 
           {category === 'conditioning' && (
             <>
+              <Field label="측정 유형">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button type="button" onClick={() => setCondUnit('count')}
+                    style={{
+                      flex: 1, padding: '9px 12px', borderRadius: 'var(--r-sm)',
+                      border: '1px solid ' + (condUnit === 'count' ? 'var(--primary)' : 'var(--line-2)'),
+                      background: condUnit === 'count' ? 'var(--primary-soft)' : 'var(--surface)',
+                      color: condUnit === 'count' ? 'var(--primary-ink)' : 'var(--ink-2)',
+                      fontWeight: condUnit === 'count' ? 700 : 500, fontSize: 13,
+                    }}>횟수 (회)</button>
+                  <button type="button" onClick={() => setCondUnit('time')}
+                    style={{
+                      flex: 1, padding: '9px 12px', borderRadius: 'var(--r-sm)',
+                      border: '1px solid ' + (condUnit === 'time' ? 'var(--primary)' : 'var(--line-2)'),
+                      background: condUnit === 'time' ? 'var(--primary-soft)' : 'var(--surface)',
+                      color: condUnit === 'time' ? 'var(--primary-ink)' : 'var(--ink-2)',
+                      fontWeight: condUnit === 'time' ? 700 : 500, fontSize: 13,
+                    }}>시간 (초)</button>
+                </div>
+              </Field>
               <Field label="트레이닝 종목">
-                <input value={metricLabel} onChange={(e) => setMetricLabel(e.target.value)}
-                  placeholder="예: 푸시업 / 행오프 / 캠퍼스 보드"
+                <input value={condBase} onChange={(e) => setCondBase(e.target.value)}
+                  placeholder={condUnit === 'time' ? '예: 행오프 / 데드행 / 플랭크' : '예: 푸시업 / 풀업 / 캠퍼스 보드'}
                   style={inputStyle} />
               </Field>
               <div style={{ display: 'flex', gap: 8 }}>
-                <Field label="현재 횟수">
-                  <input type="number" min="0" value={currentValue}
-                    onChange={(e) => setCurrentValue(e.target.value)} style={inputStyle} />
+                <Field label={condUnit === 'time' ? '현재 시간 (초)' : '현재 횟수 (회)'}>
+                  <input type="number" min="0" step="1" inputMode="numeric" pattern="[0-9]*"
+                    value={currentValue}
+                    onChange={(e) => setCurrentValue(e.target.value.replace(/[^\d]/g, ''))}
+                    style={inputStyle} />
                 </Field>
-                <Field label="목표 횟수">
-                  <input type="number" min="0" value={targetValue}
-                    onChange={(e) => setTargetValue(e.target.value)} style={inputStyle} />
+                <Field label={condUnit === 'time' ? '목표 시간 (초)' : '목표 횟수 (회)'}>
+                  <input type="number" min="0" step="1" inputMode="numeric" pattern="[0-9]*"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value.replace(/[^\d]/g, ''))}
+                    style={inputStyle} />
                 </Field>
               </div>
             </>
@@ -191,18 +374,20 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
             </Field>
           )}
 
-          <Field label="목표 마감일">
-            <input type="date" value={targetDate}
-              onChange={(e) => setTargetDate(e.target.value)} style={inputStyle} />
-          </Field>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Field label="시작 목표일">
+              <input type="date" value={startDate}
+                onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+            </Field>
+            <Field label="목표 마감일">
+              <input type="date" value={targetDate}
+                min={startDate || undefined}
+                onChange={(e) => setTargetDate(e.target.value)} style={inputStyle} />
+            </Field>
+          </div>
 
           {isEdit ? (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Btn variant="danger" full disabled={submitting} onClick={handleDelete}>삭제</Btn>
-              <Btn variant="primary" full disabled={!canSubmit || submitting} onClick={submit}>
-                {submitting ? '저장 중...' : '저장'}
-              </Btn>
-            </div>
+            <Btn variant="danger" full disabled={submitting} onClick={handleDelete}>삭제</Btn>
           ) : (
             <Btn full disabled={!canSubmit || submitting} onClick={submit}>
               {submitting ? '저장 중...' : '등록'}

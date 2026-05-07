@@ -5,6 +5,7 @@ import { ColorBadge, Pill, Btn } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import { climbLogsApi } from '../api/climbLogs';
 import RecordEditModal from '../components/modals/RecordEditModal';
+import { fmtDuration, normalizeTime } from '../components/TimeRangeField';
 
 export default function LogDetailPage() {
   const { id } = useParams();
@@ -39,8 +40,15 @@ export default function LogDetailPage() {
   }
   if (!log) return <><TopBar /><div style={{ padding: 20, color: 'var(--ink-3)' }}>로딩 중...</div></>;
 
-  const totalCleared = (log.problems || []).filter((p) => p.is_cleared).length;
-  const totalFailed = (log.problems || []).filter((p) => !p.is_cleared).length;
+  const totalCleared = (log.problems || []).reduce((s, p) =>
+    s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0);
+  const totalFailed = (log.problems || []).reduce((s, p) =>
+    s + (p.failed_count != null ? Number(p.failed_count) : (p.is_cleared ? 0 : 1)), 0);
+  const startTime = normalizeTime(log.start_time);
+  const endTime = normalizeTime(log.end_time);
+  const timeLabel = startTime && endTime
+    ? `${startTime} ~ ${endTime}${log.duration_minutes != null ? ` · ${fmtDuration(Number(log.duration_minutes))}` : ''}`
+    : (log.duration_minutes != null ? fmtDuration(Number(log.duration_minutes)) : '');
 
   return (
     <>
@@ -59,6 +67,12 @@ export default function LogDetailPage() {
         <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>
           {log.visited_at}
         </div>
+        {timeLabel && (
+          <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ink-3)' }}>
+            {I.clock ? I.clock(13) : '⏱'}
+            {timeLabel}
+          </div>
+        )}
         {(log.gym_pass || log.used_day_pass) && (
           <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ink-3)' }}>
             {I.ticket(13)}
@@ -89,37 +103,54 @@ export default function LogDetailPage() {
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)' }}>
           등록된 문제 ({log.problems?.length || 0})
         </div>
-        {(log.problems || []).map((p, i) => (
-          <div key={p.id || i} style={{
-            background: 'var(--surface)', border: '1px solid var(--line)',
-            borderRadius: 'var(--r-md)', overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px',
-              borderBottom: p.ar_route ? '1px solid var(--line)' : 'none',
+        {(log.problems || []).map((p, i) => {
+          const cleared = p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0);
+          const failed = p.failed_count != null ? Number(p.failed_count) : (p.is_cleared ? 0 : 1);
+          const videos = (p.videos && p.videos.length)
+            ? p.videos
+            : (p.ar_route ? [{ id: p.ar_route_id || p.ar_route.id, ar_route: p.ar_route }] : []);
+          return (
+            <div key={p.id || i} style={{
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)', overflow: 'hidden',
             }}>
-              <ColorBadge color={p.color} level={p.level} size="sm" />
-              {p.is_cleared
-                ? <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>완등</span>
-                : <span style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>실패</span>}
-              <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {p.attempts || 1}회</span>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                padding: '10px 14px',
+                borderBottom: videos.length ? '1px solid var(--line)' : 'none',
+              }}>
+                <ColorBadge color={p.color} level={p.level} size="sm" />
+                {cleared > 0 && (
+                  <span className="tabnum" style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>
+                    ✓ 완등 {cleared}
+                  </span>
+                )}
+                {failed > 0 && (
+                  <span className="tabnum" style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>
+                    ✗ 실패 {failed}
+                  </span>
+                )}
+                {cleared === 0 && failed === 0 && (
+                  <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {p.attempts || 1}회</span>
+                )}
+              </div>
+              {videos.map((v) => v.ar_route?.video_url && (
+                <video
+                  key={v.id || v.ar_route.id}
+                  src={v.ar_route.video_url}
+                  poster={v.ar_route.thumbnail_url || undefined}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{
+                    width: '100%', display: 'block', background: '#000',
+                    aspectRatio: '9 / 13.5', objectFit: 'contain',
+                  }}
+                />
+              ))}
             </div>
-            {p.ar_route?.video_url && (
-              <video
-                src={p.ar_route.video_url}
-                poster={p.ar_route.thumbnail_url || undefined}
-                controls
-                playsInline
-                preload="metadata"
-                style={{
-                  width: '100%', display: 'block', background: '#000',
-                  aspectRatio: '9 / 13.5', objectFit: 'contain',
-                }}
-              />
-            )}
-          </div>
-        ))}
+          );
+        })}
         {(!log.problems || log.problems.length === 0) && (
           <div style={{
             background: 'var(--surface)', border: '1px dashed var(--line-2)',
@@ -141,9 +172,16 @@ export default function LogDetailPage() {
         <RecordEditModal
           kind="climb_log"
           logId={log.id}
-          initial={{ memo: log.memo, date: log.visited_at, duration_minutes: log.duration_minutes, problems: log.problems }}
-          onSubmit={async ({ memo, date, duration_minutes }) => {
-            await climbLogsApi.update(log.id, { memo, visited_at: date, duration_minutes });
+          initial={{
+            memo: log.memo, date: log.visited_at,
+            duration_minutes: log.duration_minutes,
+            start_time: log.start_time, end_time: log.end_time,
+            problems: log.problems,
+            training_sessions: log.training_sessions,
+            gym_id: log.gym_id,
+          }}
+          onSubmit={async ({ memo, date, duration_minutes, start_time, end_time }) => {
+            await climbLogsApi.update(log.id, { memo, visited_at: date, duration_minutes, start_time, end_time });
             setReloadTick((t) => t + 1);
           }}
           onChanged={() => setReloadTick((t) => t + 1)}

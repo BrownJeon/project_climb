@@ -53,6 +53,15 @@ const GymPass = sequelize.define('GymPass', {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
   },
+  // 일시정지 (정기권 전용)
+  pause_count_used: {
+    type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0,
+    comment: '사용한 일시정지 횟수',
+  },
+  current_pause_started_at: {
+    type: DataTypes.DATEONLY, allowNull: true,
+    comment: '현재 진행 중인 일시정지 시작일 (NULL=정지 아님)',
+  },
 }, {
   tableName: 'gym_passes',
   timestamps: true,

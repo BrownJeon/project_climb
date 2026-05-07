@@ -6,7 +6,6 @@ import { I } from '../components/atoms/Icons';
 import GoalAddModal from '../components/modals/GoalAddModal';
 import { trainingApi, analyzeStream } from '../api/training';
 import { climbLogsApi } from '../api/climbLogs';
-import { useSessionAddModal } from '../contexts/SessionAddModalContext';
 import RecordActionMenu from '../components/RecordActionMenu';
 import RecordEditModal from '../components/modals/RecordEditModal';
 import ClearedSummary from '../components/ClearedSummary';
@@ -29,19 +28,17 @@ function todayISO() { return new Date().toISOString().slice(0, 10); }
 function shiftDays(n) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
 
 const CATEGORY_KO = { bouldering: '볼더링', endurance: '지구력', conditioning: '컨디셔닝', general: '기타' };
+const GOAL_CATEGORY_ICON = { bouldering: '🧗', endurance: '💪', conditioning: '🏋️', general: '🚩' };
 
 export default function TrainingPage() {
   const [tab, setTab] = useState('goals');
   const [goalAddOpen, setGoalAddOpen] = useState(false);
   const [goalsReloadTick, setGoalsReloadTick] = useState(0);
-  const { open } = useSessionAddModal();
-
   function handleAdd() {
     if (tab === 'goals') setGoalAddOpen(true);
-    else if (tab === 'records') open({ mode: 'training' });
   }
 
-  const showAddBtn = tab !== 'analysis';
+  const showAddBtn = tab === 'goals';
   const addBtn = showAddBtn ? (
     <button onClick={handleAdd} aria-label="추가"
       style={{
@@ -101,21 +98,47 @@ function GoalsTab({ reloadTick = 0 }) {
             borderRadius: 'var(--r-md)', padding: '14px', cursor: 'pointer',
           }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 700 }}>🎯 {g.title}</span>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>{GOAL_CATEGORY_ICON[g.category] || '🚩'} {g.title}</span>
             <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>· {CATEGORY_KO[g.category] || g.category}</span>
+            {(g.category === 'bouldering' || g.category === 'conditioning') && (
+              <span style={{
+                marginLeft: 'auto', fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', borderRadius: 'var(--r-pill)',
+                background: g.auto_sync ? 'var(--primary-soft)' : 'var(--surface-2)',
+                color: g.auto_sync ? 'var(--primary-ink)' : 'var(--ink-3)',
+                border: '1px solid ' + (g.auto_sync ? 'var(--primary-line)' : 'var(--line-2)'),
+              }}>{g.auto_sync ? '자동 동기화' : '수동'}</span>
+            )}
           </div>
-          {g.target_date && (
-            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 8 }}>
-              마감: {g.target_date}
-            </div>
-          )}
+          {g.target_date && (() => {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const td = new Date(g.target_date); td.setHours(0, 0, 0, 0);
+            const diff = Math.round((td - today) / 86400000);
+            let label, color;
+            if (diff > 0) { label = `D-${diff}`; color = 'var(--ink-2)'; }
+            else if (diff === 0) { label = 'D-DAY'; color = 'var(--primary)'; }
+            else { label = `${-diff}일 지남`; color = 'var(--danger)'; }
+            return (
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span>마감: {g.target_date}</span>
+                <span style={{
+                  fontWeight: 700, color, padding: '2px 7px',
+                  borderRadius: 'var(--r-pill)', background: 'var(--surface-2)',
+                  border: '1px solid var(--line)',
+                }}>{label}</span>
+              </div>
+            );
+          })()}
           {g.category === 'bouldering' && (g.metric_label || g.target_value != null) && (
             <div style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 8 }}>
+              {(g.target_brand || g.target_gym?.name) && (
+                <>📍 <b>{g.target_gym?.name || g.target_brand}</b> · </>
+              )}
               {g.metric_label && (() => {
                 const m = colorMeta(g.metric_label);
-                return <>난이도 <b>{m.kr} {m.label}</b> · </>;
+                return <>난이도 <b>{m.kr} {m.label}</b>{g.target_level ? <> <b>{g.target_level}</b></> : null} · </>;
               })()}
-              완등 <b className="tabnum">{g.current_value || 0}</b> / <b className="tabnum">{g.target_value || 0}</b>
+              완등 <b className="tabnum">{parseInt(g.current_value, 10) || 0}</b> / <b className="tabnum">{parseInt(g.target_value, 10) || 0}</b>
             </div>
           )}
           {g.category === 'endurance' && (g.metric_label || g.current_metric_label) && (
@@ -126,7 +149,7 @@ function GoalsTab({ reloadTick = 0 }) {
           {g.category === 'conditioning' && (g.metric_label || g.target_value != null) && (
             <div style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 8 }}>
               {g.metric_label && <><b>{g.metric_label}</b> · </>}
-              <span className="tabnum">{g.current_value || 0}</span> / <span className="tabnum">{g.target_value || 0}</span> 회
+              <span className="tabnum">{parseInt(g.current_value, 10) || 0}</span> / <span className="tabnum">{parseInt(g.target_value, 10) || 0}</span> 회
             </div>
           )}
           {g.category === 'general' && g.description && (

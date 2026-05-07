@@ -5,13 +5,11 @@ import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
 import { gymsApi } from '../../api/gyms';
 import { passesApi } from '../../api/passes';
 import { sessionsApi } from '../../api/sessions';
+import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '../TrainingItemFields';
+import TimeRangeField from '../TimeRangeField';
+import VideoLinkPicker from './VideoLinkPicker';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
-const TRAINING_CATS = [
-  ['endurance',    '지구력'],
-  ['conditioning', '컨디셔닝'],
-  ['bouldering',   '볼더링'],
-];
 
 function todayISO() {
   const d = new Date();
@@ -24,15 +22,17 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
   const [gyms, setGyms] = useState([]);
   const [memo, setMemo] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [passKind, setPassKind] = useState('');     // 'period' | 'count' | 'day'
   const [passId, setPassId] = useState('');
   const [periodPasses, setPeriodPasses] = useState([]);
   const [countPasses, setCountPasses] = useState([]);
 
-  const [attempts, setAttempts] = useState([]);
-  const [training, setTraining] = useState([]);
+  const [entries, setEntries] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [pickerForRow, setPickerForRow] = useState(null);
 
   useEffect(() => {
     gymsApi.list({ limit: 50 }).then((r) => setGyms(r.data?.gyms || [])).catch(() => {});
@@ -51,55 +51,61 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
   }, [gymId]);
 
   const canSubmit = !!visitedAt && !!gymId && !!passKind &&
-    (passKind === 'day' || !!passId) &&
-    (attempts.length > 0 || training.length > 0 || true /* 단순 방문도 허용 */);
+    (passKind === 'day' || !!passId);
 
-  // 행 헬퍼
-  const addAttemptRow = () => setAttempts((p) => [...p, {
+  // 항목 헬퍼 (카테고리별 통합 row)
+  const addEntry = (category = 'bouldering') => setEntries((p) => [...p, {
     _id: Date.now() + Math.random(),
-    color: '', level: '', is_cleared: false, attempts: 1, video_mode: 'none',
+    category,
+    // 볼더링
+    color: '', level: '',
+    cleared_count: 0, failed_count: 0,
+    ar_route_ids: [], ar_routes: [],
+    // 지구력
+    endurance_level: '',
+    // 컨디셔닝
+    cond_unit: 'count', cond_base: '',
+    value: '',
+    // 공통
+    start_time: '', end_time: '', duration_minutes: '',
+    memo: '',
   }]);
-  const removeAttemptRow = (id) => setAttempts((p) => p.filter((r) => r._id !== id));
-  const updateAttemptRow = (id, patch) => setAttempts((p) => p.map((r) => r._id === id ? { ...r, ...patch } : r));
-
-  const addTrainingRow = () => setTraining((p) => [...p, {
-    _id: Date.now() + Math.random(),
-    category: 'endurance', duration_minutes: '', items: [], memo: '',
-  }]);
-  const removeTrainingRow = (id) => setTraining((p) => p.filter((r) => r._id !== id));
-  const updateTrainingRow = (id, patch) => setTraining((p) => p.map((r) => r._id === id ? { ...r, ...patch } : r));
+  const removeEntry = (id) => setEntries((p) => p.filter((r) => r._id !== id));
+  const updateEntry = (id, patch) => setEntries((p) => p.map((r) => r._id === id ? { ...r, ...patch } : r));
 
   async function submit() {
     if (!canSubmit || submitting) return;
     setError(null); setSubmitting(true);
+
+    const boulderingRows = entries.filter((r) => r.category === 'bouldering');
+    const trainingRows = entries.filter((r) => r.category !== 'bouldering');
 
     const payload = {
       visited_at: visitedAt,
       gym_id: gymId,
       memo: memo || '',
       duration_minutes: durationMinutes === '' ? null : Number(durationMinutes),
-      attempts: attempts.map((a) => {
+      start_time: startTime || null,
+      end_time: endTime || null,
+      attempts: boulderingRows.map((a) => {
         const row = {
-          is_cleared: !!a.is_cleared,
-          attempts: Number(a.attempts) || 1,
-          video_mode: a.video_mode || 'none',
+          cleared_count: Number(a.cleared_count) || 0,
+          failed_count: Number(a.failed_count) || 0,
+          is_cleared: (Number(a.cleared_count) || 0) > 0,
+          attempts: 1,
+          video_mode: 'none',
         };
         if (a.color || a.level) row.new_problem = { color: a.color || null, level: a.level || null };
+        if (Array.isArray(a.ar_route_ids) && a.ar_route_ids.length) row.ar_route_ids = a.ar_route_ids;
         return row;
       }),
-      training: training.map((t) => ({
-        category: t.category,
-        duration_minutes: t.duration_minutes ? Number(t.duration_minutes) : null,
-        memo: t.memo || null,
-        items: [], // 항목 입력 UI는 추후 확장 — 현재는 카테고리/시간만
-      })),
+      training: trainingRows.map((t) => rowToTrainingPayload(t)),
     };
 
     if (passKind === 'day') payload.used_day_pass = true;
     else if (passId) payload.gym_pass_id = passId;
 
     const filesIndexed = {};
-    attempts.forEach((a, idx) => { if (a.video_mode === 'upload' && a.file) filesIndexed[idx] = a.file; });
 
     try {
       const res = await sessionsApi.create({ ...payload, files: filesIndexed });
@@ -217,118 +223,130 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
                 </div>
               </div>
 
-              <FieldNumber label="시간(분)" value={durationMinutes} onChange={setDurationMinutes} placeholder="(선택) 예: 60" />
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)' }}>
+                <TimeRangeField
+                  start={startTime} end={endTime}
+                  onChange={(p) => {
+                    setStartTime(p.start_time || '');
+                    setEndTime(p.end_time || '');
+                    setDurationMinutes(p.duration_minutes != null ? String(p.duration_minutes) : '');
+                  }}
+                  label="운동 시간 (시작 ~ 종료)" />
+              </div>
               <FieldText label="메모" value={memo} onChange={setMemo} placeholder="(선택) 한 줄 메모" isLast />
             </div>
           </div>
 
-          {/* ── 완등·시도 ── */}
+          {/* ── 카테고리 항목 ── */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <SectionLabel inline>완등·시도</SectionLabel>
-              <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>{attempts.length}개</span>
+              <SectionLabel inline>카테고리 항목</SectionLabel>
+              <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>{entries.length}개</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {attempts.map((a) => (
-                <div key={a._id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    {a.color || a.level
-                      ? <ColorBadge color={a.color} level={a.level} size="sm" />
-                      : <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>색·등급 선택</span>}
-                    <span style={{ flex: 1 }} />
-                    <button onClick={() => removeAttemptRow(a._id)} style={{ color: 'var(--ink-4)' }} aria-label="제거">{I.x(16)}</button>
-                  </div>
-
-                  {/* 색·등급 inline picker */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                    <select value={a.color} onChange={(e) => updateAttemptRow(a._id, { color: e.target.value })}
-                      style={{ padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
-                      <option value="">색상</option>
-                      {COLOR_KEYS.map((k) => <option key={k} value={k}>{colorMeta(k).kr} {colorMeta(k).label}</option>)}
-                    </select>
-                    <select value={a.level} onChange={(e) => updateAttemptRow(a._id, { level: e.target.value })}
-                      style={{ padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
-                      <option value="">V등급</option>
-                      {V_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  </div>
-
-                  {(a.color || a.level) && (
-                    <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 10 }}>
-                      자동 제목: {fmtRouteTitle(a.color, a.level)}
+              {entries.length === 0 && (
+                <div style={{
+                  background: 'var(--surface)', border: '1px dashed var(--line-2)',
+                  borderRadius: 'var(--r-md)', padding: '14px',
+                  fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'center',
+                }}>
+                  볼더링·지구력·컨디셔닝·기타 항목을 추가하세요.
+                </div>
+              )}
+              {entries.map((e) => {
+                const cat = e.category || 'bouldering';
+                const catLabel = (TRAINING_CATEGORIES.find(([k]) => k === cat) || ['', cat])[1];
+                return (
+                  <div key={e._id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <select value={cat} onChange={(ev) => updateEntry(e._id, { category: ev.target.value })}
+                        style={{ padding: '6px 10px', fontSize: 12, fontWeight: 700, borderRadius: 'var(--r-pill)', border: '1px solid var(--primary-line)', background: 'var(--primary-soft)', color: 'var(--primary-ink)' }}>
+                        {TRAINING_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                      {cat === 'bouldering' && (e.color || e.level) && (
+                        <ColorBadge color={e.color} level={e.level} size="sm" />
+                      )}
+                      <span style={{ flex: 1 }} />
+                      <button onClick={() => removeEntry(e._id)} style={{ color: 'var(--ink-4)' }} aria-label="제거">{I.x(16)}</button>
                     </div>
-                  )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 10 }}>
-                    <Checkbox
-                      checked={a.is_cleared}
-                      onClick={() => updateAttemptRow(a._id, { is_cleared: !a.is_cleared })}
-                      label="완등" tone="success"
-                    />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                      <span style={{ color: 'var(--ink-3)' }}>시도</span>
-                      <Stepper value={a.attempts} onChange={(v) => updateAttemptRow(a._id, { attempts: v })} min={1} />
-                      <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>회</span>
-                    </div>
-                  </div>
+                    {cat === 'bouldering' ? (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                          <select value={e.color} onChange={(ev) => updateEntry(e._id, { color: ev.target.value })}
+                            style={{ padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
+                            <option value="">색상</option>
+                            {COLOR_KEYS.map((k) => <option key={k} value={k}>{colorMeta(k).kr} {colorMeta(k).label}</option>)}
+                          </select>
+                          <select value={e.level} onChange={(ev) => updateEntry(e._id, { level: ev.target.value })}
+                            style={{ padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
+                            <option value="">V등급</option>
+                            {V_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </div>
 
-                  {/* 영상 옵션 */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <RadioOpt mini label="영상 없음"     checked={a.video_mode === 'none'}   onClick={() => updateAttemptRow(a._id, { video_mode: 'none', file: null })} />
-                    <RadioOpt mini label="새로 업로드"   checked={a.video_mode === 'upload'} onClick={() => updateAttemptRow(a._id, { video_mode: 'upload' })}
-                      sub={a.file ? `${a.file.name} (${Math.round(a.file.size / 1024 / 1024)}MB)` : null} />
-                    {a.video_mode === 'upload' && (
-                      <input type="file" accept="video/*" onChange={(e) => updateAttemptRow(a._id, { file: e.target.files?.[0] })}
-                        style={{ marginLeft: 25, fontSize: 12 }} />
+                        {(e.color || e.level) && (
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 10 }}>
+                            자동 제목: {fmtRouteTitle(e.color, e.level)}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>완등 (개)</div>
+                            <input type="number" min="0" step="1" inputMode="numeric"
+                              value={e.cleared_count ?? 0}
+                              onChange={(ev) => updateEntry(e._id, { cleared_count: ev.target.value.replace(/[^\d]/g, '') || 0 })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>실패 (개)</div>
+                            <input type="number" min="0" step="1" inputMode="numeric"
+                              value={e.failed_count ?? 0}
+                              onChange={(ev) => updateEntry(e._id, { failed_count: ev.target.value.replace(/[^\d]/g, '') || 0 })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>연결된 영상 ({(e.ar_route_ids || []).length})</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {(e.ar_routes || []).map((vid) => (
+                              <span key={vid.id} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                fontSize: 11, padding: '4px 9px', borderRadius: 'var(--r-pill)',
+                                background: 'var(--primary-soft)', color: 'var(--ink-1)',
+                                border: '1px solid var(--primary-line)', fontWeight: 600,
+                              }}>
+                                📹 {vid.title || `#${vid.id}`}
+                                <button type="button" onClick={() => updateEntry(e._id, {
+                                  ar_route_ids: (e.ar_route_ids || []).filter((x) => x !== vid.id),
+                                  ar_routes: (e.ar_routes || []).filter((x) => x.id !== vid.id),
+                                })} style={{ marginLeft: 2, color: 'var(--ink-3)' }}>×</button>
+                              </span>
+                            ))}
+                            <button type="button" onClick={() => setPickerForRow(e._id)}
+                              style={{
+                                fontSize: 11, fontWeight: 600,
+                                padding: '4px 9px', borderRadius: 'var(--r-pill)',
+                                border: '1px dashed var(--line-2)', background: 'var(--surface)',
+                                color: 'var(--primary)',
+                              }}>+ 영상 연결</button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <TrainingItemFields row={e} onPatch={(patch) => updateEntry(e._id, patch)} />
                     )}
                   </div>
-                </div>
-              ))}
-              <Btn variant="ghost" full icon={I.plus(14)} onClick={addAttemptRow}>완등·시도 추가</Btn>
-            </div>
-          </div>
-
-          {/* ── 훈련 ── */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <SectionLabel inline>훈련</SectionLabel>
-              <button onClick={addTrainingRow} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>+ 추가</button>
-            </div>
-            {training.length === 0 ? (
-              <div style={{
-                background: 'var(--surface)', border: '1px dashed var(--line-2)',
-                borderRadius: 'var(--r-md)', padding: '14px',
-                fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'center',
-              }}>
-                훈련 항목을 추가하면 분석에 반영됩니다.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {training.map((t) => (
-                  <div key={t._id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      <Pill tone="primary">
-                        {TRAINING_CATS.find(([k]) => k === t.category)?.[1] || t.category}
-                      </Pill>
-                      <span style={{ flex: 1 }} />
-                      <button onClick={() => removeTrainingRow(t._id)} style={{ color: 'var(--ink-4)' }} aria-label="제거">{I.x(16)}</button>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <select value={t.category} onChange={(e) => updateTrainingRow(t._id, { category: e.target.value })}
-                        style={{ padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
-                        {TRAINING_CATS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                      </select>
-                      <input type="number" placeholder="시간(분)" value={t.duration_minutes}
-                        onChange={(e) => updateTrainingRow(t._id, { duration_minutes: e.target.value })}
-                        style={{ padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }} />
-                    </div>
-                    <input placeholder="메모" value={t.memo}
-                      onChange={(e) => updateTrainingRow(t._id, { memo: e.target.value })}
-                      style={{ width: '100%', padding: '8px 10px', marginTop: 8, fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }} />
-                  </div>
+                );
+              })}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                {TRAINING_CATEGORIES.map(([k, l]) => (
+                  <Btn key={k} variant="ghost" size="sm" onClick={() => addEntry(k)}>+ {l}</Btn>
                 ))}
               </div>
-            )}
+            </div>
           </div>
 
           <div style={{ height: 8 }} />
@@ -338,6 +356,28 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
       <style>{`
         @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
       `}</style>
+
+      {pickerForRow && (() => {
+        const a = entries.find((x) => x._id === pickerForRow);
+        return (
+          <VideoLinkPicker
+            defaultColor={a?.color || ''}
+            defaultLevel={a?.level || ''}
+            onPick={(r) => {
+              const ids = a?.ar_route_ids || [];
+              if (!ids.includes(r.id)) {
+                const list = a?.ar_routes || [];
+                updateEntry(pickerForRow, {
+                  ar_route_ids: [...ids, r.id],
+                  ar_routes: [...list, { id: r.id, title: r.title, thumbnail_url: r.thumbnail_url, color: r.color || r.problem?.color, level: r.level || r.problem?.level }],
+                });
+              }
+              setPickerForRow(null);
+            }}
+            onClose={() => setPickerForRow(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

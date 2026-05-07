@@ -85,9 +85,64 @@ async function ensureColumns() {
     'current_metric_label',
     "current_metric_label VARCHAR(40) NULL COMMENT '현재 난이도/측정 라벨'"
   );
+  await addColumnIfMissing(
+    'training_goals',
+    'auto_sync',
+    "auto_sync TINYINT(1) NOT NULL DEFAULT 1 COMMENT '운동 기록 변경 시 자동 재계산'"
+  );
+  await addColumnIfMissing(
+    'training_goals',
+    'target_gym_id',
+    "target_gym_id BIGINT UNSIGNED NULL COMMENT '특정 지점만 카운트'"
+  );
+  await addColumnIfMissing(
+    'training_goals',
+    'target_brand',
+    "target_brand VARCHAR(80) NULL COMMENT '같은 브랜드 모든 지점 카운트'"
+  );
+  await addColumnIfMissing(
+    'training_goals',
+    'target_level',
+    "target_level VARCHAR(10) NULL COMMENT 'V등급 (NULL=색상만 매칭)'"
+  );
+  await addColumnIfMissing(
+    'training_goals',
+    'start_date',
+    "start_date DATE NULL COMMENT '목표 시작일'"
+  );
+
+  // 정기권 일시정지
+  await addColumnIfMissing(
+    'gym_passes', 'pause_count_used',
+    "pause_count_used INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '사용한 일시정지 횟수'"
+  );
+  await addColumnIfMissing(
+    'gym_passes', 'current_pause_started_at',
+    "current_pause_started_at DATE NULL COMMENT '현재 진행 중인 일시정지 시작일 (NULL=정지 아님)'"
+  );
+
+  // 운동 시간 범위 (HH:MM)
+  await addColumnIfMissing('climb_logs', 'start_time',
+    "start_time VARCHAR(5) NULL COMMENT 'HH:MM'");
+  await addColumnIfMissing('climb_logs', 'end_time',
+    "end_time VARCHAR(5) NULL COMMENT 'HH:MM'");
+  await addColumnIfMissing('training_sessions', 'start_time',
+    "start_time VARCHAR(5) NULL COMMENT 'HH:MM'");
+  await addColumnIfMissing('training_sessions', 'end_time',
+    "end_time VARCHAR(5) NULL COMMENT 'HH:MM'");
 
   // ar_routes
   await addColumnIfMissing('ar_routes', 'tags', 'tags JSON NULL');
+  await addColumnIfMissing('ar_routes', 'color',
+    "color VARCHAR(20) NULL COMMENT '영상 단독 등록 시 색상 메타 (problem과 무관)'");
+  await addColumnIfMissing('ar_routes', 'level',
+    "level VARCHAR(10) NULL COMMENT 'V등급 (problem과 무관하게 영상 자체에 부여)'");
+
+  // climb_log_problems — 난이도별 합산 카운트
+  await addColumnIfMissing('climb_log_problems', 'cleared_count',
+    "cleared_count INT UNSIGNED NULL COMMENT '난이도별 완등 개수'");
+  await addColumnIfMissing('climb_log_problems', 'failed_count',
+    "failed_count INT UNSIGNED NULL COMMENT '난이도별 실패 개수'");
 
   // climb_log_problems
   await addColumnIfMissing(
@@ -232,6 +287,36 @@ async function createTablesIfNeeded() {
        INDEX idx_user_created (user_id, created_at),
        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
        FOREIGN KEY (template_id) REFERENCES training_prompt_templates(id) ON DELETE SET NULL
+     )`
+  );
+
+  await createTableIfMissing(
+    'climb_log_problem_videos',
+    `CREATE TABLE climb_log_problem_videos (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       climb_log_problem_id BIGINT UNSIGNED NOT NULL,
+       ar_route_id BIGINT UNSIGNED NOT NULL,
+       sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       UNIQUE KEY uk_cp_ar (climb_log_problem_id, ar_route_id),
+       INDEX idx_cp (climb_log_problem_id),
+       FOREIGN KEY (climb_log_problem_id) REFERENCES climb_log_problems(id) ON DELETE CASCADE,
+       FOREIGN KEY (ar_route_id) REFERENCES ar_routes(id) ON DELETE CASCADE
+     )`
+  );
+
+  await createTableIfMissing(
+    'gym_pass_pauses',
+    `CREATE TABLE gym_pass_pauses (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       gym_pass_id BIGINT UNSIGNED NOT NULL,
+       started_at DATE NOT NULL,
+       ended_at DATE NULL,
+       days_used INT UNSIGNED NULL,
+       note VARCHAR(200) NULL,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       INDEX idx_pass (gym_pass_id, started_at),
+       FOREIGN KEY (gym_pass_id) REFERENCES gym_passes(id) ON DELETE CASCADE
      )`
   );
 }

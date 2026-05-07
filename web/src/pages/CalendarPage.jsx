@@ -69,7 +69,9 @@ export default function CalendarPage() {
 
   const selectedDate = new Date(year, month - 1, selected);
   const dayName = DAY_LABELS[selectedDate.getDay()];
-  const totalCleared = logs.reduce((acc, l) => acc + (l.problems || []).filter((p) => p.is_cleared).length, 0);
+  // 신규: cleared_count 합산. 없는 row(레거시)는 is_cleared로 fallback.
+  const totalCleared = logs.reduce((acc, l) => acc + (l.problems || []).reduce((s, p) =>
+    s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0), 0);
 
   const addBtn = (
     <button
@@ -115,7 +117,10 @@ export default function CalendarPage() {
           const sel = selected === d;
           const todayMark = isToday(d);
           return (
-            <button key={i} onClick={() => setSelected(d)} style={{
+            <button key={i} onClick={() => {
+              if (selected === d) navigate(`/calendar/${date}`);
+              else setSelected(d);
+            }} style={{
               aspectRatio: '1', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
               borderRadius: 'var(--r-sm)', position: 'relative',
@@ -197,9 +202,16 @@ export default function CalendarPage() {
         <RecordEditModal
           kind="climb_log"
           logId={editLog.id}
-          initial={{ memo: editLog.memo, date: editLog.visited_at, duration_minutes: editLog.duration_minutes, problems: editLog.problems }}
-          onSubmit={async ({ memo, date, duration_minutes }) => {
-            await climbLogsApi.update(editLog.id, { memo, visited_at: date, duration_minutes });
+          initial={{
+            memo: editLog.memo, date: editLog.visited_at,
+            duration_minutes: editLog.duration_minutes,
+            start_time: editLog.start_time, end_time: editLog.end_time,
+            problems: editLog.problems,
+            training_sessions: editLog.training_sessions,
+            gym_id: editLog.gym_id,
+          }}
+          onSubmit={async ({ memo, date, duration_minutes, start_time, end_time }) => {
+            await climbLogsApi.update(editLog.id, { memo, visited_at: date, duration_minutes, start_time, end_time });
             setReloadTick((t) => t + 1);
           }}
           onChanged={() => setReloadTick((t) => t + 1)}

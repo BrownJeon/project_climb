@@ -13,6 +13,8 @@ export default function PassEditModal({ pass, onClose, onSaved }) {
   const [totalCount, setTotalCount] = useState(pass.total_count ?? 0);
   const [remainingCount, setRemainingCount] = useState(pass.remaining_count ?? 0);
   const [hasExpiry, setHasExpiry] = useState(!!pass.end_date);
+  const [pauseCountUsed, setPauseCountUsed] = useState(pass.pause_count_used ?? 0);
+  const pauseMax = pass.pause_max ?? 0;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -28,6 +30,7 @@ export default function PassEditModal({ pass, onClose, onSaved }) {
       if (isPeriod) {
         body.start_date = startDate;
         body.end_date = endDate;
+        if (pauseMax > 0) body.pause_count_used = Number(pauseCountUsed) || 0;
       } else {
         body.total_count = Number(totalCount);
         body.remaining_count = Number(remainingCount);
@@ -76,6 +79,15 @@ export default function PassEditModal({ pass, onClose, onSaved }) {
               <Field label="만료일" required>
                 <input type="date" value={endDate || ''} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
               </Field>
+              {pauseMax > 0 && (
+                <Field label={`일시정지 사용 횟수 (최대 ${pauseMax}회)`}>
+                  <input type="number" min={0} max={pauseMax} value={pauseCountUsed}
+                    onChange={(e) => setPauseCountUsed(e.target.value)} style={inputStyle} />
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
+                    이미 사용한 횟수를 줄여 일시정지를 다시 사용할 수 있습니다.
+                  </div>
+                </Field>
+              )}
             </>
           ) : (
             <>

@@ -5,8 +5,42 @@ const {
   ClimbLog, ClimbLogProblem, Problem, Gym,
 } = require('../models');
 const trainingAnalyzer = require('../services/trainingAnalyzer');
+const { recomputeUserGoals } = require('../services/goalProgress');
+const { computeDurationMinutes, normalizeTime } = require('../utils/timeRange');
 
 // ─────────────────── 목표 ───────────────────
+
+/**
+ * progress_percent 자동 계산.
+ *  - target_value / current_value 둘 다 유효한 숫자면: round(current/target × 100), 0~100 clamp
+ *  - metric_label 에 "이하"/"이내"/"under"/"≤" 포함되면 역방향: 목표를 작게 만드는 게 진척
+ *      (예: target=30분, current=45분 → 진척 0%, current=20분 → 진척 100%)
+ *  - 사용자가 명시 progress_percent 보냈으면 그 값 우선 (override)
+ *  - target_value 없거나 0이면 자동 계산 불가 → null 반환 (변경 안 함)
+ */
+function computeProgressPercent({ target_value, current_value, metric_label, current_metric_label, explicit }) {
+  if (explicit !== undefined && explicit !== null && explicit !== '') {
+    const n = Number(explicit);
+    if (Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(n)));
+  }
+  const target = Number(target_value);
+  const current = Number(current_value);
+  if (!Number.isFinite(target) || target === 0 || !Number.isFinite(current)) return null;
+
+  const label = `${metric_label ?? ''} ${current_metric_label ?? ''}`.toLowerCase();
+  const isReversed = /이하|이내|미만|under|<=|≤/.test(label);
+
+  let pct;
+  if (isReversed) {
+    // 작게 만드는 목표: target / current × 100 (current가 target 이하면 100%)
+    if (current <= target) pct = 100;
+    else pct = (target / current) * 100;
+  } else {
+    pct = (current / target) * 100;
+  }
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
 async function listGoals(req, res, next) {
   try {
     const status = req.query.status;
@@ -19,16 +53,25 @@ async function listGoals(req, res, next) {
 
 async function createGoal(req, res, next) {
   try {
-    const { title, description, category, metric_label, current_metric_label, target_value, current_value, target_date, progress_percent } = req.body;
+    const { title, description, category, metric_label, current_metric_label, target_value, current_value, start_date, target_date, progress_percent, auto_sync, target_gym_id, target_brand, target_level } = req.body;
     if (!title || !category) {
       return res.status(400).json({ success: false, message: 'title과 category 필수', data: null });
     }
+    const computedPct = computeProgressPercent({
+      target_value, current_value, metric_label, current_metric_label, explicit: progress_percent,
+    });
     const goal = await TrainingGoal.create({
       user_id: req.user.id,
       title, description, category, metric_label, current_metric_label,
-      target_value, current_value, target_date,
-      progress_percent: progress_percent || 0,
+      target_value, current_value, start_date, target_date,
+      progress_percent: computedPct ?? 0,
+      auto_sync: auto_sync !== undefined ? !!auto_sync : true,
+      target_gym_id: target_gym_id || null,
+      target_brand: target_brand || null,
+      target_level: target_level || null,
     });
+    // 자동 동기화 켜진 목표면 즉시 기존 데이터 기준으로 재계산
+    if (goal.auto_sync) recomputeUserGoals(req.user.id).catch(() => {});
     return res.status(201).json({ success: true, data: goal, message: '목표가 등록되었습니다.' });
   } catch (e) { next(e); }
 }
@@ -40,10 +83,25 @@ async function updateGoal(req, res, next) {
     if (Number(goal.user_id) !== Number(req.user.id))
       return res.status(403).json({ success: false, message: '권한 없음', data: null });
 
-    const updatable = ['title','description','category','metric_label','current_metric_label','target_value','current_value','target_date','status','progress_percent'];
+    const updatable = ['title','description','category','metric_label','current_metric_label','target_value','current_value','start_date','target_date','status','progress_percent','auto_sync','target_gym_id','target_brand','target_level'];
     const updates = {};
     for (const k of updatable) if (req.body[k] !== undefined) updates[k] = req.body[k];
+
+    // progress_percent 자동 재계산 — target_value / current_value 변경되면 따라가야 함.
+    // 사용자가 명시적으로 progress_percent 보내면 그 값 우선 (computeProgressPercent 내부에서 처리).
+    const merged = {
+      target_value:        updates.target_value        ?? goal.target_value,
+      current_value:       updates.current_value       ?? goal.current_value,
+      metric_label:        updates.metric_label        ?? goal.metric_label,
+      current_metric_label: updates.current_metric_label ?? goal.current_metric_label,
+      explicit:            req.body.progress_percent,
+    };
+    const computedPct = computeProgressPercent(merged);
+    if (computedPct !== null) updates.progress_percent = computedPct;
+
     await goal.update(updates);
+    // auto_sync 켜진 상태로 변경됐거나, 카테고리/metric_label 변경됐다면 즉시 재계산
+    if (goal.auto_sync) recomputeUserGoals(req.user.id).catch(() => {});
     return res.json({ success: true, data: goal, message: '목표가 수정되었습니다.' });
   } catch (e) { next(e); }
 }
@@ -152,13 +210,18 @@ async function listSessions(req, res, next) {
 async function createSession(req, res, next) {
   try {
     const { session_date, category, gym_id, duration_minutes, memo, items = [] } = req.body;
+    const start_time = normalizeTime(req.body.start_time);
+    const end_time = normalizeTime(req.body.end_time);
     if (!session_date || !category) {
       return res.status(400).json({ success: false, message: 'session_date·category 필수', data: null });
     }
+    const computedDur = computeDurationMinutes(start_time, end_time);
     const s = await TrainingSession.create({
       user_id: req.user.id,
       session_date, category, gym_id: gym_id || null,
-      duration_minutes: duration_minutes || null,
+      duration_minutes: computedDur != null ? computedDur : (duration_minutes || null),
+      start_time,
+      end_time,
       memo: memo || null,
     });
     if (items.length) {
@@ -176,6 +239,7 @@ async function createSession(req, res, next) {
       );
     }
     const created = await TrainingSession.findByPk(s.id, { include: [{ model: TrainingSessionItem, as: 'items' }] });
+    recomputeUserGoals(req.user.id).catch(() => {});
     return res.status(201).json({ success: true, data: created, message: '훈련 세션이 등록되었습니다.' });
   } catch (e) { next(e); }
 }
@@ -187,14 +251,40 @@ async function updateSession(req, res, next) {
     if (Number(s.user_id) !== Number(req.user.id))
       return res.status(403).json({ success: false, message: '권한 없음', data: null });
 
-    const updatable = ['session_date', 'category', 'duration_minutes', 'memo'];
+    const updatable = ['session_date', 'category', 'duration_minutes', 'memo', 'start_time', 'end_time'];
     const updates = {};
     for (const k of updatable) if (req.body[k] !== undefined) updates[k] = req.body[k];
-    if (Object.keys(updates).length === 0) {
+    if (updates.start_time !== undefined) updates.start_time = normalizeTime(updates.start_time);
+    if (updates.end_time !== undefined) updates.end_time = normalizeTime(updates.end_time);
+    // 시간 범위가 들어오면 duration_minutes 자동 계산 (override)
+    const newStart = updates.start_time !== undefined ? updates.start_time : s.start_time;
+    const newEnd   = updates.end_time   !== undefined ? updates.end_time   : s.end_time;
+    const computedDur = computeDurationMinutes(newStart, newEnd);
+    if (computedDur != null) updates.duration_minutes = computedDur;
+    const itemsProvided = Array.isArray(req.body.items);
+    if (Object.keys(updates).length === 0 && !itemsProvided) {
       return res.status(400).json({ success: false, message: '수정할 항목이 없습니다.', data: null });
     }
-    await s.update(updates);
-    return res.json({ success: true, data: s, message: '세션이 수정되었습니다.' });
+    if (Object.keys(updates).length) await s.update(updates);
+    const _origUserId = s.user_id;
+    if (itemsProvided) {
+      await TrainingSessionItem.destroy({ where: { session_id: s.id } });
+      if (req.body.items.length) {
+        await TrainingSessionItem.bulkCreate(req.body.items.map((it, idx) => ({
+          session_id: s.id,
+          exercise_name: it.exercise_name,
+          sets: it.sets ?? null,
+          reps_or_seconds: it.reps_or_seconds ?? null,
+          metric_unit: it.metric_unit ?? null,
+          weight_kg: it.weight_kg ?? null,
+          notes: it.notes ?? null,
+          sort_order: idx,
+        })));
+      }
+    }
+    const refreshed = await TrainingSession.findByPk(s.id, { include: [{ model: TrainingSessionItem, as: 'items' }] });
+    recomputeUserGoals(_origUserId).catch(() => {});
+    return res.json({ success: true, data: refreshed, message: '세션이 수정되었습니다.' });
   } catch (e) { next(e); }
 }
 
@@ -204,7 +294,9 @@ async function deleteSession(req, res, next) {
     if (!s) return res.status(404).json({ success: false, message: '세션 없음', data: null });
     if (Number(s.user_id) !== Number(req.user.id))
       return res.status(403).json({ success: false, message: '권한 없음', data: null });
+    const ownerId = s.user_id;
     await s.destroy();
+    recomputeUserGoals(ownerId).catch(() => {});
     return res.json({ success: true, data: null, message: '삭제되었습니다.' });
   } catch (e) { next(e); }
 }

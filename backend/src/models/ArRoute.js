@@ -14,6 +14,15 @@ const ArRoute = sequelize.define('ArRoute', {
   problem_id: {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: true,
+    comment: '레거시. 신규 등록은 color/level 직접 컬럼 사용. NULL 허용.',
+  },
+  color: {
+    type: DataTypes.STRING(20), allowNull: true,
+    comment: '영상 단독 색상 메타',
+  },
+  level: {
+    type: DataTypes.STRING(10), allowNull: true,
+    comment: 'V등급',
   },
   title: {
     type: DataTypes.STRING(200),

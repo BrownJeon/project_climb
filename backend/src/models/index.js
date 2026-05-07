@@ -10,6 +10,8 @@ const Bookmark = require('./Bookmark');
 const ClimbLog = require('./ClimbLog');
 const ClimbLogProblem = require('./ClimbLogProblem');
 const GymPass = require('./GymPass');
+const GymPassPause = require('./GymPassPause');
+const ClimbLogProblemVideo = require('./ClimbLogProblemVideo');
 const UserMainGym = require('./UserMainGym');
 const TrainingGoal = require('./TrainingGoal');
 const TrainingSession = require('./TrainingSession');
@@ -116,10 +118,16 @@ GymPass.belongsTo(Gym, { foreignKey: 'gym_id', as: 'gym' });
 
 // ClimbLog - GymPass (이용권 사용)
 ClimbLog.belongsTo(GymPass, { foreignKey: 'gym_pass_id', as: 'gym_pass' });
+GymPass.hasMany(GymPassPause, { foreignKey: 'gym_pass_id', as: 'pauses' });
+GymPassPause.belongsTo(GymPass, { foreignKey: 'gym_pass_id' });
 
 // ClimbLogProblem - ArRoute (영상 연결)
 ClimbLogProblem.belongsTo(ArRoute, { foreignKey: 'ar_route_id', as: 'ar_route' });
 ArRoute.hasMany(ClimbLogProblem, { foreignKey: 'ar_route_id', as: 'climb_attempts' });
+// ClimbLogProblem - ClimbLogProblemVideo (다대다 영상 link)
+ClimbLogProblem.hasMany(ClimbLogProblemVideo, { foreignKey: 'climb_log_problem_id', as: 'video_links', onDelete: 'CASCADE' });
+ClimbLogProblemVideo.belongsTo(ClimbLogProblem, { foreignKey: 'climb_log_problem_id' });
+ClimbLogProblemVideo.belongsTo(ArRoute, { foreignKey: 'ar_route_id', as: 'ar_route' });
 
 // 훈련 도메인
 User.hasMany(TrainingGoal, { foreignKey: 'user_id' });
@@ -146,7 +154,7 @@ TrainingAnalysis.belongsTo(TrainingPromptTemplate, {
 module.exports = {
   sequelize,
   User, Gym, Problem, ArRoute, Follow, Like, Comment, Bookmark,
-  ClimbLog, ClimbLogProblem, GymPass,
+  ClimbLog, ClimbLogProblem, ClimbLogProblemVideo, GymPass, GymPassPause,
   UserMainGym,
   TrainingGoal, TrainingSession, TrainingSessionItem,
   TrainingPromptTemplate, TrainingAnalysis,

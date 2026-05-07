@@ -37,8 +37,10 @@ const ClimbLog = sequelize.define('ClimbLog', {
   duration_minutes: {
     type: DataTypes.INTEGER.UNSIGNED,
     allowNull: true,
-    comment: '운동 시간(분)',
+    comment: '운동 시간(분) — start_time/end_time 으로부터 자동 계산',
   },
+  start_time: { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:MM' },
+  end_time:   { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:MM' },
 }, {
   tableName: 'climb_logs',
   timestamps: true,

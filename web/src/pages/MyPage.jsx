@@ -7,6 +7,7 @@ import { I } from '../components/atoms/Icons';
 import ProfileEditModal from '../components/modals/ProfileEditModal';
 import PassAddModal from '../components/modals/PassAddModal';
 import PassEditModal from '../components/modals/PassEditModal';
+import VideoUploadModal from '../components/modals/VideoUploadModal';
 import { usersApi } from '../api/users';
 import { passesApi } from '../api/passes';
 import { formatTenure, formatDateKR } from '../utils/climbingTenure';
@@ -27,6 +28,7 @@ export default function MyPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [passAddOpen, setPassAddOpen] = useState(false);
   const [passEditTarget, setPassEditTarget] = useState(null);
+  const [videoUploadOpen, setVideoUploadOpen] = useState(false);
 
   function loadUser() {
     usersApi.me().then((r) => setUser(r.data)).catch(() => {});
@@ -199,6 +201,12 @@ export default function MyPage() {
                   <>
                     <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 3 }}>📅 {p.start_date} ~ {p.end_date}</div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>⏳ 잔여 {p.days_remaining}일</div>
+                    {p.pause_max > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
+                        일시정지 사용 <b className="tabnum">{p.pause_count_used || 0}</b> / <b className="tabnum">{p.pause_max}</b>
+                        {p.is_paused && <span style={{ marginLeft: 6, color: 'var(--warn)', fontWeight: 700 }}>· 정지 중 (시작 {p.current_pause_started_at})</span>}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -217,7 +225,26 @@ export default function MyPage() {
                   </>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                  {p.pass_type === 'period' && p.pause_max > 0 && !p.is_expired && (
+                    p.is_paused ? (
+                      <Btn variant="soft" size="sm"
+                        onClick={async () => {
+                          if (!confirm('정지를 해제하면 해제일 기준으로 만료일이 자동 연장됩니다. 진행할까요?')) return;
+                          try { await passesApi.resume(p.id); loadPasses(); }
+                          catch (e) { alert(e?.response?.data?.message || '해제 실패'); }
+                        }}>정지 해제</Btn>
+                    ) : (
+                      <Btn variant="ghost" size="sm"
+                        disabled={(p.pause_count_used || 0) >= p.pause_max}
+                        onClick={async () => {
+                          const left = p.pause_max - (p.pause_count_used || 0);
+                          if (!confirm(`일시정지를 시작합니다. 사용 가능 ${left}회 남음.`)) return;
+                          try { await passesApi.pause(p.id); loadPasses(); }
+                          catch (e) { alert(e?.response?.data?.message || '정지 실패'); }
+                        }}>일시정지</Btn>
+                    )
+                  )}
                   <Btn variant="ghost" size="sm" onClick={() => setPassEditTarget(p)}>수정</Btn>
                   <Btn variant="ghost" size="sm" onClick={() => deletePass(p.id)}>삭제</Btn>
                 </div>
@@ -228,7 +255,7 @@ export default function MyPage() {
       </div>
 
       {/* Tabs (영상/북마크) */}
-      <div style={{ display: 'flex', gap: 18, padding: '0 16px', borderBottom: '1px solid var(--line)', background: 'var(--surface)' }}>
+      <div style={{ display: 'flex', gap: 18, padding: '0 16px', borderBottom: '1px solid var(--line)', background: 'var(--surface)', alignItems: 'center' }}>
         {[
           ['routes',    `내 영상 (${user.routeCount ?? 0})`],
           ['bookmarks', '북마크'],
@@ -238,12 +265,22 @@ export default function MyPage() {
             fontSize: 13, fontWeight: tab === k ? 700 : 500, color: tab === k ? 'var(--ink-1)' : 'var(--ink-3)',
           }}>{l}</button>
         ))}
+        {tab === 'routes' && (
+          <button onClick={() => setVideoUploadOpen(true)} aria-label="영상 등록"
+            style={{
+              marginLeft: 'auto', width: 30, height: 30, borderRadius: 'var(--r-pill)',
+              display: 'grid', placeItems: 'center',
+              color: 'var(--ink-2)', background: 'var(--surface-2)',
+            }}>{I.plus(16)}</button>
+        )}
       </div>
 
       <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {(tab === 'bookmarks' ? bookmarks : routes).map((r) => (
           <RouteCard key={r.id} compact route={{
-            id: r.id, color: r.problem?.color, level: r.problem?.level,
+            id: r.id,
+            color: r.color || r.problem?.color,
+            level: r.level || r.problem?.level,
             thumbnail_url: r.thumbnail_url,
             date: r.created_at, cleared: r.cleared, attempts: r.attempts,
             likes: r.like_count ?? 0, bookmarks: r.bookmarks ?? 0, saved: r.saved,
@@ -287,6 +324,12 @@ export default function MyPage() {
           pass={passEditTarget}
           onClose={() => setPassEditTarget(null)}
           onSaved={() => loadPasses()}
+        />
+      )}
+      {videoUploadOpen && (
+        <VideoUploadModal
+          onClose={() => setVideoUploadOpen(false)}
+          onSaved={() => loadRoutesPage(1, false)}
         />
       )}
     </>

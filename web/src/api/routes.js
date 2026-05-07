@@ -3,6 +3,9 @@ import { client } from './client';
 export const routesApi = {
   list: (params = {}) => client.get('/routes', { params }),
   get: (id) => client.get(`/routes/${id}`),
+  create: (formData) => client.post('/routes', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
   update: (id, formData) => client.put(`/routes/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

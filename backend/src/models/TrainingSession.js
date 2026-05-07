@@ -11,6 +11,8 @@ const TrainingSession = sequelize.define('TrainingSession', {
   },
   gym_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true },
   duration_minutes: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
+  start_time: { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:MM' },
+  end_time:   { type: DataTypes.STRING(5), allowNull: true, comment: 'HH:MM' },
   memo: { type: DataTypes.TEXT, allowNull: true },
 }, {
   tableName: 'training_sessions',

@@ -23,6 +23,9 @@ async function listRoutes(req, res, next) {
 
     const where = {};
     if (problem_id) where.problem_id = problem_id;
+    // 영상 자체 color/level 필터 (단독 등록 영상 검색용)
+    if (req.query.color) where.color = req.query.color;
+    if (req.query.level) where.level = req.query.level;
 
     // mine=true 또는 user_id=me → 본인 영상만
     if (mine === 'true' || user_id === 'me') {
@@ -114,21 +117,32 @@ async function getRoute(req, res, next) {
   }
 }
 
-// POST /api/routes
+// POST /api/routes  (영상 단독 등록 — color/level 메타만 받음. problem_id는 옵션/legacy)
 async function createRoute(req, res, next) {
   try {
-    const { title, description, problem_id, ar_data, tags } = req.body;
+    const { title, description, problem_id, ar_data, tags, color, level } = req.body;
     if (!req.file) {
       return res.status(400).json({ success: false, message: '영상 파일이 필요합니다.', data: null });
     }
 
     const video_url = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
 
+    // title 자동 보강 — 비어 있으면 색상·V등급 기반 또는 기본값
+    const COLOR_KR = {
+      red: '빨강🔴', orange: '주황🟠', yellow: '노랑🟡', green: '초록🟢',
+      blue: '파랑🔵', navy: '남색🟦', pink: '핑크🌸', purple: '보라🟣',
+      black: '검정⚫', white: '하양⚪', gray: '회색⬛',
+    };
+    const finalTitle = (title && title.trim())
+      || (color || level ? `${COLOR_KR[color] || color || ''} ${level || ''}`.trim() : '영상');
+
     const route = await ArRoute.create({
       user_id: req.user.id,
       problem_id: problem_id || null,
-      title,
-      description,
+      color: color || null,
+      level: level || null,
+      title: finalTitle,
+      description: description || null,
       video_url,
       ar_data: ar_data ? JSON.parse(ar_data) : null,
       tags: tags ? JSON.parse(tags) : null,
@@ -171,11 +185,14 @@ async function updateRoute(req, res, next) {
       }
     }
 
-    // problem 갱신: color/level/gym_id 받아 동일 문제 findOrCreate
-    if (color || level || gym_id) {
-      const targetGymId = gym_id ? Number(gym_id) : (route.problem?.gym_id || null);
-      const newColor = color ?? route.problem?.color ?? null;
-      const newLevel = level ?? route.problem?.level ?? null;
+    // 영상 자체 메타 (color/level)는 ar_routes 컬럼에 직접 저장
+    if (color !== undefined) updates.color = color || null;
+    if (level !== undefined) updates.level = level || null;
+    // problem 링크는 gym_id가 명시되어야만 (구식 흐름 호환)
+    if (gym_id) {
+      const targetGymId = Number(gym_id);
+      const newColor = color ?? route.color ?? route.problem?.color ?? null;
+      const newLevel = level ?? route.level ?? route.problem?.level ?? null;
       if (targetGymId && newColor && newLevel) {
         let problem = await Problem.findOne({
           where: { gym_id: targetGymId, color: newColor, level: newLevel },

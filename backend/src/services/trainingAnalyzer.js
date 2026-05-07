@@ -113,21 +113,25 @@ async function analyze({ user, range, perspectives, extraPrompt, templateKey, st
   const stage1Ms = Date.now() - t1;
 
   // 5) 2단계 CLI (실제 분석)
+  // 참고: claude CLI 2.0.64의 stream-json 모드 버그(effortLevel null)로 인해
+  // 스트리밍이 비어 오는 경우가 있어, stream 요청도 비스트리밍으로 호출 후
+  // 결과를 단일 chunk로 yield하는 pseudo-stream으로 처리한다.
   const t2 = Date.now();
-  if (stream) {
-    const iter = runClaude({
-      prompt: generatedPrompt, stream: true, timeoutMs: STAGE2_TIMEOUT,
-    });
-    return {
-      template: tpl, metaPrompt, generatedPrompt,
-      stage1Ms, stage2StartedAt: t2,
-      stream: iter,
-    };
-  }
   const result = await runClaude({
     prompt: generatedPrompt, stream: false, timeoutMs: STAGE2_TIMEOUT,
   });
   const stage2Ms = Date.now() - t2;
+  if (stream) {
+    const iter = (async function* () {
+      if (result) yield result;
+    })();
+    return {
+      template: tpl, metaPrompt, generatedPrompt,
+      stage1Ms, stage2StartedAt: t2,
+      stream: iter,
+      result,
+    };
+  }
   return {
     template: tpl, metaPrompt, generatedPrompt,
     stage1Ms, stage2Ms,

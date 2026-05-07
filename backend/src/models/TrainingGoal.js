@@ -15,7 +15,8 @@ const TrainingGoal = sequelize.define('TrainingGoal', {
   current_metric_label: { type: DataTypes.STRING(40), allowNull: true, comment: '현재 난이도/측정 라벨' },
   target_value: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   current_value: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-  target_date: { type: DataTypes.DATEONLY, allowNull: true },
+  start_date: { type: DataTypes.DATEONLY, allowNull: true, comment: '목표 시작일' },
+  target_date: { type: DataTypes.DATEONLY, allowNull: true, comment: '목표 마감일' },
   status: {
     type: DataTypes.ENUM('in_progress', 'done', 'archived'),
     allowNull: false,
@@ -25,6 +26,24 @@ const TrainingGoal = sequelize.define('TrainingGoal', {
     type: DataTypes.SMALLINT.UNSIGNED,
     allowNull: false,
     defaultValue: 0,
+  },
+  auto_sync: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+    comment: '운동 기록 변경 시 current_value/progress_percent 자동 재계산',
+  },
+  target_gym_id: {
+    type: DataTypes.BIGINT.UNSIGNED, allowNull: true,
+    comment: '특정 지점만 카운트 (NULL=무관)',
+  },
+  target_brand: {
+    type: DataTypes.STRING(80), allowNull: true,
+    comment: '같은 브랜드 모든 지점 카운트 (NULL=무관)',
+  },
+  target_level: {
+    type: DataTypes.STRING(10), allowNull: true,
+    comment: 'V등급 (NULL=색상만 매칭)',
   },
 }, {
   tableName: 'training_goals',

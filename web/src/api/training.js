@@ -7,6 +7,7 @@ export const trainingApi = {
   deleteGoal: (id) => client.delete(`/training/goals/${id}`),
 
   sessions: (params) => client.get('/training/sessions', { params }),
+  createSession: (body) => client.post('/training/sessions', body),
   updateSession: (id, body) => client.patch(`/training/sessions/${id}`, body),
   deleteSession: (id) => client.delete(`/training/sessions/${id}`),
 

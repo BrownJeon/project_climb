@@ -37,7 +37,15 @@ const ClimbLogProblem = sequelize.define('ClimbLogProblem', {
   ar_route_id: {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: true,
-    comment: '연결된 본인 영상 (선택)',
+    comment: '레거시 단일 link. 다중은 climb_log_problem_videos 사용',
+  },
+  cleared_count: {
+    type: DataTypes.INTEGER.UNSIGNED, allowNull: true,
+    comment: '난이도별 완등 개수 (신규 흐름)',
+  },
+  failed_count: {
+    type: DataTypes.INTEGER.UNSIGNED, allowNull: true,
+    comment: '난이도별 실패 개수 (신규 흐름)',
   },
 }, {
   tableName: 'climb_log_problems',

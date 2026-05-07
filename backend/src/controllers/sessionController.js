@@ -12,6 +12,7 @@ const {
   validateArRouteOwnership, validateAttemptsRow,
 } = require('../services/sessionHelpers');
 const { attachThumbnailAsync } = require('../services/thumbnail');
+const { computeDurationMinutes, normalizeTime } = require('../utils/timeRange');
 
 function formatRouteTitle({ color, level }) {
   const COLOR = {
@@ -29,6 +30,12 @@ async function createSession(req, res, next) {
   try {
     const userId = req.user.id;
     const { visited_at, gym_id, memo, gym_pass_id, used_day_pass, duration_minutes } = req.body;
+    const start_time = normalizeTime(req.body.start_time);
+    const end_time = normalizeTime(req.body.end_time);
+    const computedDuration = computeDurationMinutes(start_time, end_time);
+    const finalDuration = computedDuration != null
+      ? computedDuration
+      : (duration_minutes !== undefined && duration_minutes !== '' ? Number(duration_minutes) : null);
 
     if (!visited_at || !gym_id) {
       await t.rollback();
@@ -75,11 +82,18 @@ async function createSession(req, res, next) {
       gym_id, visited_at, memo: memo || null,
       gym_pass_id: gym_pass_id || null,
       used_day_pass: !!(used_day_pass === true || used_day_pass === 'true'),
-      duration_minutes: duration_minutes !== undefined && duration_minutes !== '' ? Number(duration_minutes) : null,
+      duration_minutes: finalDuration,
+      start_time,
+      end_time,
     }, { transaction: t });
 
     // (2) 횟수권 차감
     await decrementCountPassIfNeeded(pass, t);
+    // (2-b) 정지 중 정기권으로 운동 등록 시 → 자동 정지 해제 + 만료일 연장
+    if (pass && pass.pass_type === 'period' && pass.current_pause_started_at) {
+      const { autoResumeIfPaused } = require('./gymPassController');
+      await autoResumeIfPaused(pass.id, visited_at, t);
+    }
 
     // (3) attempts 행 처리
     const filesByIndex = (req.files || []).reduce((acc, f) => {
@@ -150,26 +164,59 @@ async function createSession(req, res, next) {
         arRouteId = row.ar_route_id;
       }
 
-      await ClimbLogProblem.create({
+      const clearedCount = row.cleared_count != null ? Number(row.cleared_count) : null;
+      const failedCount = row.failed_count != null ? Number(row.failed_count) : null;
+      // 호환: cleared_count/failed_count가 들어오면 그 값, 아니면 기존 is_cleared/attempts
+      const cp = await ClimbLogProblem.create({
         log_id: log.id,
         problem_id: problemId,
-        custom_level: row.custom_level || null,
-        custom_color: row.custom_color || null,
-        is_cleared: !!row.is_cleared,
+        custom_level: row.new_problem?.level || row.custom_level || null,
+        custom_color: row.new_problem?.color || row.custom_color || null,
+        is_cleared: clearedCount != null ? clearedCount > 0 : !!row.is_cleared,
         attempts: row.attempts ? Number(row.attempts) : 1,
+        cleared_count: clearedCount,
+        failed_count: failedCount,
         ar_route_id: arRouteId,
       }, { transaction: t });
+
+      // 다중 영상 link
+      const videoIds = Array.isArray(row.ar_route_ids) ? row.ar_route_ids : [];
+      const allLinkIds = arRouteId ? [...new Set([arRouteId, ...videoIds])] : videoIds;
+      if (allLinkIds.length) {
+        const { ClimbLogProblemVideo } = require('../models');
+        // ownership 검증
+        for (const vid of allLinkIds) {
+          try { await validateArRouteOwnership(vid, userId, gym_id, t); }
+          catch (e) {
+            await t.rollback();
+            return res.status(e.statusCode || 400).json({ success: false, message: e.message, data: null });
+          }
+        }
+        await ClimbLogProblemVideo.bulkCreate(
+          allLinkIds.map((vid, idx) => ({
+            climb_log_problem_id: cp.id,
+            ar_route_id: vid,
+            sort_order: idx,
+          })),
+          { transaction: t, ignoreDuplicates: true }
+        );
+      }
     }
 
     // (4) 훈련 항목
     const trainingSessionIds = [];
     for (const tr of training) {
+      const trStartTime = normalizeTime(tr.start_time);
+      const trEndTime = normalizeTime(tr.end_time);
+      const trDur = computeDurationMinutes(trStartTime, trEndTime);
       const ts = await TrainingSession.create({
         user_id: userId,
         session_date: visited_at,
         category: tr.category,
         gym_id,
-        duration_minutes: tr.duration_minutes ?? null,
+        duration_minutes: trDur != null ? trDur : (tr.duration_minutes ?? null),
+        start_time: trStartTime,
+        end_time: trEndTime,
         memo: tr.memo ?? null,
       }, { transaction: t });
       trainingSessionIds.push(ts.id);
@@ -202,6 +249,8 @@ async function createSession(req, res, next) {
       const updated = await GymPass.findByPk(pass.id);
       remaining = updated?.pass_type === 'count' ? updated.remaining_count : null;
     }
+
+    require('../services/goalProgress').recomputeUserGoals(userId).catch(() => {});
 
     return res.status(201).json({
       success: true,
