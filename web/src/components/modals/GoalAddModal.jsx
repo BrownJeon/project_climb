@@ -52,7 +52,8 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
     : { base: '', unit: 'count' };
   const [condBase, setCondBase] = useState(initCond.base);
   const [condUnit, setCondUnit] = useState(initCond.unit); // 'count' | 'time'
-  const [autoSync, setAutoSync] = useState(goal?.auto_sync !== undefined ? !!goal.auto_sync : true);
+  // 기타 외 모든 카테고리는 자동 동기화 강제
+  const autoSync = true;
   // 볼더링 — 암장/브랜드/V등급 한정
   // gymScope: 'all' | 'gym' | 'brand'
   const initScope = goal?.target_gym_id ? 'gym' : (goal?.target_brand ? 'brand' : 'all');
@@ -186,27 +187,16 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
             </select>
           </Field>
 
-          {(category === 'bouldering' || category === 'conditioning') && (
-            <label style={{
-              display: 'flex', alignItems: 'flex-start', gap: 8,
-              padding: '10px 12px', borderRadius: 'var(--r-sm)',
-              border: '1px solid ' + (autoSync ? 'var(--primary-line)' : 'var(--line)'),
-              background: autoSync ? 'var(--primary-soft)' : 'var(--surface)',
-              cursor: 'pointer',
+          {category !== 'general' && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 'var(--r-sm)',
+              background: 'var(--primary-soft)', border: '1px solid var(--primary-line)',
+              fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.5,
             }}>
-              <input type="checkbox" checked={autoSync}
-                onChange={(e) => setAutoSync(e.target.checked)}
-                style={{ marginTop: 2 }} />
-              <span style={{ flex: 1, fontSize: 12 }}>
-                <span style={{ fontWeight: 700, color: 'var(--ink-1)' }}>운동 기록 자동 동기화</span>
-                <span style={{ display: 'block', color: 'var(--ink-3)', marginTop: 3, lineHeight: 1.45 }}>
-                  {category === 'bouldering'
-                    ? '같은 색상의 완등 횟수를 자동으로 합산해 진행률을 갱신합니다.'
-                    : '같은 종목·단위의 운동 기록 최대값으로 진행률을 갱신합니다.'}
-                  {' 끄면 [현재 값] 입력만으로 진행률이 계산됩니다.'}
-                </span>
-              </span>
-            </label>
+              {category === 'bouldering' && '같은 색상·V등급의 완등 횟수가 운동 기록에서 자동으로 합산됩니다.'}
+              {category === 'endurance' && '같은 난이도의 지구력 항목 등록 횟수가 운동 기록에서 자동으로 합산됩니다.'}
+              {category === 'conditioning' && '같은 종목·단위의 운동 기록 최댓값이 자동으로 갱신됩니다.'}
+            </div>
           )}
 
           {/* 카테고리별 측정 기준 */}

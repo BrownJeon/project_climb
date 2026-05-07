@@ -129,6 +129,7 @@ export default function GymDetailPage() {
               {routes.map((r) => (
                 <RouteCard key={r.id} route={{
                   id: r.id, color: r.problem?.color, level: r.problem?.level,
+                  thumbnail_url: r.thumbnail_url,
                   date: r.created_at, cleared: r.cleared, attempts: r.attempts,
                   likes: r.like_count ?? 0, bookmarks: r.bookmarks ?? 0, saved: r.saved,
                 }} />

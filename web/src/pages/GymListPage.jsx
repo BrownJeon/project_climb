@@ -178,7 +178,15 @@ export default function GymListPage() {
               cursor: 'pointer',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              {g.thumbnail_url && (
+                <div style={{
+                  width: 64, aspectRatio: '9 / 13', flexShrink: 0,
+                  borderRadius: 'var(--r-sm)', overflow: 'hidden',
+                  background: `#000 center/cover no-repeat url("${g.thumbnail_url}")`,
+                  border: '1px solid var(--line)',
+                }} />
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
                   <span style={{ fontSize: 15, fontWeight: 700 }}>{g.name}</span>

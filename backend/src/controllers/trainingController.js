@@ -421,13 +421,14 @@ async function analyze(req, res, next) {
 
 async function listAnalyses(req, res, next) {
   try {
-    const limit = Math.min(parseInt(req.query.limit || '50', 10), 100);
-    const rows = await TrainingAnalysis.findAll({
+    const limit = Math.min(parseInt(req.query.limit || '10', 10), 100);
+    const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
+    const { rows, count } = await TrainingAnalysis.findAndCountAll({
       where: { user_id: req.user.id },
       attributes: ['id', 'period_from', 'period_to', 'perspectives', 'duration_ms', 'created_at',
                    'template_key', 'template_version'],
       order: [['created_at', 'DESC']],
-      limit,
+      limit, offset,
     });
     const analyses = rows.map((r) => ({
       id: r.id, from: r.period_from, to: r.period_to,
@@ -436,7 +437,7 @@ async function listAnalyses(req, res, next) {
       created_at: r.created_at,
       template: r.template_key ? { key: r.template_key, version: r.template_version } : null,
     }));
-    return res.json({ success: true, data: { analyses }, message: null });
+    return res.json({ success: true, data: { analyses, total: count, limit, offset }, message: null });
   } catch (e) { next(e); }
 }
 

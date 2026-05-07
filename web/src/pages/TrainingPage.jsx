@@ -100,15 +100,6 @@ function GoalsTab({ reloadTick = 0 }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>{GOAL_CATEGORY_ICON[g.category] || '🚩'} {g.title}</span>
             <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>· {CATEGORY_KO[g.category] || g.category}</span>
-            {(g.category === 'bouldering' || g.category === 'conditioning') && (
-              <span style={{
-                marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-                padding: '2px 7px', borderRadius: 'var(--r-pill)',
-                background: g.auto_sync ? 'var(--primary-soft)' : 'var(--surface-2)',
-                color: g.auto_sync ? 'var(--primary-ink)' : 'var(--ink-3)',
-                border: '1px solid ' + (g.auto_sync ? 'var(--primary-line)' : 'var(--line-2)'),
-              }}>{g.auto_sync ? '자동 동기화' : '수동'}</span>
-            )}
           </div>
           {g.target_date && (() => {
             const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -327,6 +318,14 @@ function RecordsTab() {
   );
 }
 
+const ANALYSIS_PAGE_SIZE = 5;
+const PERSPECTIVE_KO = {
+  strength_weakness: '약점·강점',
+  trend: '진행 추세',
+  next_week_plan: '다음 1주 추천 메뉴',
+  injury_risk: '부상 리스크',
+};
+
 function AnalysisTab() {
   const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayISO() });
   const [perspectives, setPerspectives] = useState(['strength_weakness', 'trend', 'next_week_plan']);
@@ -335,10 +334,42 @@ function AnalysisTab() {
   const [result, setResult] = useState('');
   const [error, setError] = useState(null);
   const [history, setHistory] = useState([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  useEffect(() => {
-    trainingApi.analyses({ limit: 10 }).then((r) => setHistory(r.data?.analyses || [])).catch(() => {});
-  }, []);
+  function loadHistory(p = page) {
+    trainingApi.analyses({ limit: ANALYSIS_PAGE_SIZE, offset: p * ANALYSIS_PAGE_SIZE })
+      .then((r) => {
+        setHistory(r.data?.analyses || []);
+        setHistoryTotal(r.data?.total || 0);
+      }).catch(() => {});
+  }
+
+  useEffect(() => { loadHistory(page); /* eslint-disable-next-line */ }, [page]);
+
+  async function openDetail(id) {
+    setDetailLoading(true);
+    try {
+      const r = await trainingApi.analysis(id);
+      setDetail(r.data);
+    } catch (e) {
+      alert(e?.response?.data?.message || e.message || '상세를 불러오지 못했습니다.');
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  async function deleteHistory(id) {
+    if (!confirm('이 분석 기록을 삭제하시겠어요?')) return;
+    try {
+      await trainingApi.deleteAnalysis(id);
+      // 마지막 페이지에서 마지막 항목 삭제 시 이전 페이지로
+      if (history.length === 1 && page > 0) setPage((p) => p - 1);
+      else loadHistory(page);
+    } catch (e) { alert(e.message || '삭제 실패'); }
+  }
 
   function selectRange(key, days) {
     setRange({ key, from: shiftDays(days), to: todayISO() });
@@ -356,8 +387,8 @@ function AnalysisTab() {
         else if (ev.event === 'done') setStage('done');
         else if (ev.event === 'error') { setStage('error'); setError(ev.data?.message); }
       }
-      const r = await trainingApi.analyses({ limit: 10 });
-      setHistory(r.data?.analyses || []);
+      setPage(0);
+      loadHistory(0);
     } catch (e) {
       setStage('error');
       setError(e.message || '분석 실패');
@@ -426,22 +457,114 @@ function AnalysisTab() {
       )}
 
       {/* 과거 분석 */}
-      {history.length > 0 && (
+      {historyTotal > 0 && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', marginTop: 4 }}>과거 분석 ({history.length})</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', marginTop: 4 }}>
+            과거 분석 ({historyTotal})
+          </div>
           {history.map((h) => (
-            <div key={h.id} style={{
-              background: 'var(--surface)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r-md)', padding: '12px 14px',
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{h.from} ~ {h.to}</div>
+            <div key={h.id}
+              onClick={() => openDetail(h.id)}
+              role="button" tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openDetail(h.id); }}
+              style={{
+                background: 'var(--surface)', border: '1px solid var(--line)',
+                borderRadius: 'var(--r-md)', padding: '12px 14px', cursor: 'pointer',
+              }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{h.from} ~ {h.to}</div>
+                <button onClick={(e) => { e.stopPropagation(); deleteHistory(h.id); }}
+                  aria-label="삭제" style={{ color: 'var(--ink-4)', padding: 4 }}>
+                  {I.trash(14)}
+                </button>
+              </div>
               <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
+                {(h.perspectives || []).map((k) => PERSPECTIVE_KO[k] || k).join(' · ') || '관점 없음'}
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 3 }}>
                 {h.duration_ms}ms · 템플릿 {h.template?.key || '-'} v{h.template?.version || '?'}
               </div>
             </div>
           ))}
+          {(() => {
+            const totalPages = Math.max(1, Math.ceil(historyTotal / ANALYSIS_PAGE_SIZE));
+            return totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                  style={{ padding: '6px 12px', fontSize: 12, color: page === 0 ? 'var(--ink-4)' : 'var(--ink-2)' }}>
+                  이전
+                </button>
+                <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                  {page + 1} / {totalPages}
+                </span>
+                <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                  style={{ padding: '6px 12px', fontSize: 12, color: page >= totalPages - 1 ? 'var(--ink-4)' : 'var(--ink-2)' }}>
+                  다음
+                </button>
+              </div>
+            );
+          })()}
         </>
       )}
+
+      {(detail || detailLoading) && (
+        <AnalysisDetailModal
+          loading={detailLoading}
+          data={detail}
+          onClose={() => { setDetail(null); setDetailLoading(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AnalysisDetailModal({ data, loading, onClose }) {
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'var(--bg)', width: '100%', maxWidth: 'var(--max-w, 480px)',
+        maxHeight: '90%', borderRadius: '20px 20px 0 0', overflow: 'auto',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 2,
+          padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--surface)', borderBottom: '1px solid var(--line)',
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>분석 상세</span>
+          <button onClick={onClose} style={{ fontSize: 14, color: 'var(--ink-3)' }}>닫기</button>
+        </div>
+        {loading && !data && (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>로딩 중...</div>
+        )}
+        {data && (
+          <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)', padding: '12px 14px',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{data.from} ~ {data.to}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
+                {(data.perspectives || []).map((k) => PERSPECTIVE_KO[k] || k).join(' · ') || '관점 없음'}
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 3 }}>
+                engine: {data.engine || '-'} · {data.duration_ms}ms
+                {data.template ? ` · 템플릿 ${data.template.key} v${data.template.version}` : ''}
+              </div>
+            </div>
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)', padding: '14px',
+              fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.65, whiteSpace: 'pre-wrap',
+            }}>
+              {data.result_markdown || '(결과 없음)'}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

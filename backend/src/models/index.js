@@ -142,7 +142,7 @@ TrainingSession.hasMany(TrainingSessionItem, {
   as: 'items',
   onDelete: 'CASCADE',
 });
-TrainingSessionItem.belongsTo(TrainingSession, { foreignKey: 'session_id' });
+TrainingSessionItem.belongsTo(TrainingSession, { foreignKey: 'session_id', as: 'session' });
 
 User.hasMany(TrainingAnalysis, { foreignKey: 'user_id' });
 TrainingAnalysis.belongsTo(User, { foreignKey: 'user_id' });

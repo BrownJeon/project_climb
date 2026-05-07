@@ -120,10 +120,24 @@ async function listGyms(req, res, next) {
         visits.forEach((v) => { lastVisitedMap[v.gym_id] = v.last_visited; });
       }
 
+      // 최신 영상 썸네일 1장 (목록 카드용)
+      const [thumbs] = await sequelize.query(
+        `SELECT t.gym_id, t.thumbnail_url FROM (
+           SELECT p.gym_id AS gym_id, r.thumbnail_url AS thumbnail_url, r.created_at AS created_at,
+                  ROW_NUMBER() OVER (PARTITION BY p.gym_id ORDER BY (r.thumbnail_url IS NULL) ASC, r.created_at DESC) AS rn
+             FROM ar_routes r JOIN problems p ON r.problem_id = p.id
+            WHERE p.gym_id IN (:ids)
+         ) t WHERE t.rn = 1`,
+        { replacements: { ids: gymIds } }
+      );
+      const thumbMap = {};
+      thumbs.forEach((t) => { thumbMap[t.gym_id] = t.thumbnail_url || null; });
+
       gymsJson.forEach((g) => {
         g.routes_breakdown = byGym[g.id] || [];
         if (g.route_count == null) g.route_count = total[g.id] || 0;
         g.last_visited_at = lastVisitedMap[g.id] || null;
+        g.thumbnail_url = thumbMap[g.id] || null;
       });
     }
 

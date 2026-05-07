@@ -7,7 +7,9 @@
  *                 (climb_log_problems.is_cleared && problem.color === metric_label)
  *  - conditioning: metric_label = "종목 (회|초)" → 종목+단위가 일치하는
  *                  training_session_items.reps_or_seconds 의 최대값
- *  - endurance / general: 자동 매핑 어려워 패스 (사용자 수동 갱신)
+ *  - endurance  : metric_label = YDS 난이도(예 "5.10d") → 같은 난이도의
+ *                  지구력 항목 등록 횟수
+ *  - general    : 자유 입력이라 자동 매핑 불가 (사용자 수동 갱신)
  */
 const {
   TrainingGoal, TrainingSession, TrainingSessionItem,
@@ -78,6 +80,19 @@ async function computeBoulderingCurrent(userId, color, { targetGymId, targetBran
   return cps.reduce((acc, cp) => acc + (cp.cleared_count != null ? Number(cp.cleared_count) : (cp.is_cleared ? 1 : 0)), 0);
 }
 
+async function computeEnduranceCurrent(userId, level) {
+  if (!level) return 0;
+  const exerciseName = `지구력 등반 (${level})`;
+  const count = await TrainingSessionItem.count({
+    where: { exercise_name: exerciseName },
+    include: [{
+      model: TrainingSession, as: 'session', required: true,
+      attributes: [], where: { user_id: userId, category: 'endurance' },
+    }],
+  });
+  return count;
+}
+
 async function computeConditioningCurrent(userId, base, unit) {
   if (!base) return 0;
   const items = await TrainingSessionItem.findAll({
@@ -118,6 +133,8 @@ async function recomputeUserGoals(userId) {
       } else if (g.category === 'conditioning' && g.metric_label) {
         const parsed = parseConditioningLabel(g.metric_label);
         if (parsed) current = await computeConditioningCurrent(userId, parsed.base, parsed.unit);
+      } else if (g.category === 'endurance' && g.metric_label) {
+        current = await computeEnduranceCurrent(userId, g.metric_label);
       }
     } catch (err) {
       console.warn('[goalProgress] compute fail goal=', g.id, err.message);
