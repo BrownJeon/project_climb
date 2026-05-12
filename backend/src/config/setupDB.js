@@ -143,6 +143,8 @@ async function ensureColumns() {
     "cleared_count INT UNSIGNED NULL COMMENT '난이도별 완등 개수'");
   await addColumnIfMissing('climb_log_problems', 'failed_count',
     "failed_count INT UNSIGNED NULL COMMENT '난이도별 실패 개수'");
+  await addColumnIfMissing('climb_log_problems', 'style',
+    "style VARCHAR(20) NULL COMMENT '볼더링 카테고리: slab/vertical/overhang/cave/other'");
 
   // climb_log_problems
   await addColumnIfMissing(
@@ -306,6 +308,21 @@ async function createTablesIfNeeded() {
   );
 
   await createTableIfMissing(
+    'climb_log_problem_photos',
+    `CREATE TABLE climb_log_problem_photos (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       climb_log_problem_id BIGINT UNSIGNED NOT NULL,
+       photo_url VARCHAR(500) NOT NULL,
+       hold_annotations LONGTEXT NULL COMMENT 'JSON 배열: [{type,x,y,w?,h?,r?,color,stroke}] 좌표는 % 단위',
+       failure_tags VARCHAR(255) NULL COMMENT '쉼표 구분: footwork,balance,reach,grip,power,reading,other',
+       failure_memo TEXT NULL,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       INDEX idx_cp (climb_log_problem_id),
+       FOREIGN KEY (climb_log_problem_id) REFERENCES climb_log_problems(id) ON DELETE CASCADE
+     )`
+  );
+
+  await createTableIfMissing(
     'gym_pass_pauses',
     `CREATE TABLE gym_pass_pauses (
        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
@@ -317,6 +334,28 @@ async function createTablesIfNeeded() {
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
        INDEX idx_pass (gym_pass_id, started_at),
        FOREIGN KEY (gym_pass_id) REFERENCES gym_passes(id) ON DELETE CASCADE
+     )`
+  );
+
+  await addColumnIfMissing('training_routines', 'target_color',
+    "target_color VARCHAR(20) NULL COMMENT '볼더링 목표 색상'");
+  await addColumnIfMissing('training_routines', 'cond_unit',
+    "cond_unit VARCHAR(10) NULL COMMENT '컨디셔닝 단위: count|time'");
+
+  await createTableIfMissing(
+    'training_routines',
+    `CREATE TABLE training_routines (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       user_id BIGINT UNSIGNED NOT NULL,
+       day_of_week TINYINT UNSIGNED NOT NULL COMMENT '0=일,1=월,2=화,3=수,4=목,5=금,6=토',
+       category VARCHAR(20) NOT NULL COMMENT 'bouldering/endurance/conditioning/general/rest',
+       label VARCHAR(50) NULL,
+       target_count INT UNSIGNED NULL,
+       target_minutes INT UNSIGNED NULL,
+       sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       INDEX idx_user_dow (user_id, day_of_week),
+       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
      )`
   );
 }

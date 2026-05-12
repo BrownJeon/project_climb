@@ -176,6 +176,7 @@ async function createSession(req, res, next) {
         attempts: row.attempts ? Number(row.attempts) : 1,
         cleared_count: clearedCount,
         failed_count: failedCount,
+        style: row.style || null,
         ar_route_id: arRouteId,
       }, { transaction: t });
 

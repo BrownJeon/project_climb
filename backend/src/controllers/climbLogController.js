@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, sequelize } = require('../models');
+const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, sequelize } = require('../models');
 const { attachThumbnailAsync } = require('../services/thumbnail');
 const { recomputeUserGoals } = require('../services/goalProgress');
 const { computeDurationMinutes, normalizeTime } = require('../utils/timeRange');
@@ -77,6 +77,7 @@ async function getLogsByDate(req, res, next) {
               required: false,
               include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url', 'color', 'level'], required: false }],
             },
+            { model: ClimbLogProblemPhoto, as: 'photos', required: false },
           ],
         },
       ],
@@ -129,6 +130,7 @@ async function getLogsByDate(req, res, next) {
         attempts: p.attempts,
         cleared_count: p.cleared_count,
         failed_count: p.failed_count,
+        style: p.style,
         ar_route_id: p.ar_route_id,
         ar_route: p.ar_route ? p.ar_route.toJSON() : null,
         videos: (p.video_links || []).map((v) => ({
@@ -136,6 +138,12 @@ async function getLogsByDate(req, res, next) {
           ar_route_id: v.ar_route_id,
           sort_order: v.sort_order,
           ar_route: v.ar_route ? v.ar_route.toJSON() : null,
+        })),
+        photos: (p.photos || []).map((ph) => ({
+          id: ph.id, photo_url: ph.photo_url,
+          hold_annotations: ph.hold_annotations,
+          failure_tags: ph.failure_tags,
+          failure_memo: ph.failure_memo,
         })),
       })),
     }));
@@ -172,6 +180,7 @@ async function getLogById(req, res, next) {
               required: false,
               include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url', 'color', 'level'], required: false }],
             },
+            { model: ClimbLogProblemPhoto, as: 'photos', required: false },
           ],
         },
       ],
@@ -219,6 +228,7 @@ async function getLogById(req, res, next) {
         attempts: p.attempts,
         cleared_count: p.cleared_count,
         failed_count: p.failed_count,
+        style: p.style,
         ar_route_id: p.ar_route_id,
         ar_route: p.ar_route ? p.ar_route.toJSON() : null,
         videos: (p.video_links || []).map((v) => ({
@@ -226,6 +236,12 @@ async function getLogById(req, res, next) {
           ar_route_id: v.ar_route_id,
           sort_order: v.sort_order,
           ar_route: v.ar_route ? v.ar_route.toJSON() : null,
+        })),
+        photos: (p.photos || []).map((ph) => ({
+          id: ph.id, photo_url: ph.photo_url,
+          hold_annotations: ph.hold_annotations,
+          failure_tags: ph.failure_tags,
+          failure_memo: ph.failure_memo,
         })),
       })),
     };
@@ -444,6 +460,7 @@ async function updateLogProblem(req, res, next) {
       if (!Number.isInteger(n) || n < 0) return res.status(400).json({ success: false, data: null, message: 'failed_count는 0 이상 정수' });
       updates.failed_count = n;
     }
+    if (req.body.style !== undefined) updates.style = req.body.style || null;
     const videosProvided = Array.isArray(req.body.ar_route_ids);
 
     if (Object.keys(updates).length === 0 && !videosProvided) {
@@ -498,7 +515,7 @@ async function addLogProblem(req, res, next) {
   try {
     const userId = req.user.id;
     const { logId } = req.params;
-    const { color, level, cleared_count, failed_count, ar_route_ids } = req.body || {};
+    const { color, level, style, cleared_count, failed_count, ar_route_ids } = req.body || {};
     if (!color && !level) {
       return res.status(400).json({ success: false, data: null, message: '색상 또는 등급을 입력하세요.' });
     }
@@ -520,6 +537,7 @@ async function addLogProblem(req, res, next) {
       is_cleared: cc > 0,
       attempts: 1,
       cleared_count: cc, failed_count: fc,
+      style: style || null,
       ar_route_id: null,
     });
     // 다중 영상 link
@@ -655,7 +673,7 @@ async function getSummary(req, res, next) {
       where: { user_id: userId, visited_at: { [Op.between]: [from, to] } },
       include: [{
         model: ClimbLogProblem, as: 'problems',
-        attributes: ['id', 'is_cleared', 'attempts'],
+        attributes: ['id', 'is_cleared', 'cleared_count', 'failed_count', 'attempts', 'custom_color', 'custom_level'],
         include: [{ model: Problem, as: 'problem', attributes: ['color', 'level'] }],
       }],
       order: [['visited_at', 'ASC']],
@@ -666,24 +684,36 @@ async function getSummary(req, res, next) {
     const clearedByLevel = {};
     const clearedByColorLevel = {};
     let totalCleared = 0;
+    let totalFailed = 0;
     logs.forEach((l) => {
       (l.problems || []).forEach((cp) => {
-        if (!cp.is_cleared) return;
-        totalCleared++;
-        const lv = cp.problem?.level || '미지정';
-        const color = cp.problem?.color || 'unknown';
-        clearedByLevel[lv] = (clearedByLevel[lv] || 0) + 1;
+        const cleared = cp.cleared_count != null ? Number(cp.cleared_count) : (cp.is_cleared ? 1 : 0);
+        const failed = cp.failed_count != null ? Number(cp.failed_count) : 0;
+        if (cleared === 0 && failed === 0) return;
+        totalCleared += cleared;
+        totalFailed += failed;
+        if (cleared === 0) return;
+        const lv = cp.problem?.level || cp.custom_level || '미지정';
+        const color = cp.problem?.color || cp.custom_color || 'unknown';
+        clearedByLevel[lv] = (clearedByLevel[lv] || 0) + cleared;
         const key = `${color}|${lv}`;
-        clearedByColorLevel[key] = (clearedByColorLevel[key] || 0) + 1;
+        clearedByColorLevel[key] = (clearedByColorLevel[key] || 0) + cleared;
       });
     });
 
+    const COLOR_ORDER = ['red','orange','yellow','green','blue','navy','pink','purple','black','white','gray','unknown'];
+    function levelRank(lv) {
+      if (!lv || lv === '미지정' || lv === 'unknown') return 9999;
+      const n = parseInt(String(lv).replace(/\D/g, ''), 10);
+      return Number.isFinite(n) ? n : 9998;
+    }
     const breakdown = Object.entries(clearedByColorLevel).map(([k, count]) => {
       const [color, level] = k.split('|');
       return { color, level, count };
     }).sort((a, b) => {
-      const ln = (lv) => parseInt(String(lv).replace(/\D/g, ''), 10) || 0;
-      return ln(a.level) - ln(b.level);
+      const lvDiff = levelRank(a.level) - levelRank(b.level);
+      if (lvDiff !== 0) return lvDiff;
+      return (COLOR_ORDER.indexOf(a.color) + 1 || 99) - (COLOR_ORDER.indexOf(b.color) + 1 || 99);
     });
 
     // 훈련 세션 카테고리별 카운트
@@ -709,7 +739,9 @@ async function getSummary(req, res, next) {
         visits,
         dates,
         total_cleared: totalCleared,
+        total_failed: totalFailed,
         cleared_by_level: clearedByLevel,
+        breakdown,
         cleared_breakdown: breakdown,
         training_by_category: trainingByCategory,
       },
@@ -720,10 +752,208 @@ async function getSummary(req, res, next) {
   }
 }
 
+/**
+ * GET /api/climb-logs/problems
+ * 플랫 climb_log_problems 목록 (기록관리 메뉴 필터용)
+ *  - from, to (YYYY-MM-DD), gym_id, color, level, style
+ *  - limit, offset (페이지)
+ *  - 각 행에 visited_at, gym_name, photos count, video count 포함
+ */
+async function listLogProblems(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { from, to, gym_id, color, level, style } = req.query;
+    const limit = Math.min(Number(req.query.limit) || 30, 100);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    const cpWhere = {};
+    if (color) cpWhere[Op.or] = [{ custom_color: color }, { '$problem.color$': color }];
+    if (level) {
+      const lvCond = { [Op.or]: [{ custom_level: level }, { '$problem.level$': level }] };
+      cpWhere[Op.and] = cpWhere[Op.and] ? [...cpWhere[Op.and], lvCond] : [lvCond];
+    }
+    if (style) cpWhere.style = style;
+
+    const climbLogWhere = { user_id: userId };
+    if (from && to) climbLogWhere.visited_at = { [Op.between]: [from, to] };
+    else if (from) climbLogWhere.visited_at = { [Op.gte]: from };
+    else if (to) climbLogWhere.visited_at = { [Op.lte]: to };
+    if (gym_id) climbLogWhere.gym_id = Number(gym_id);
+
+    // 1) 매칭 id + 정렬 — log alias 사용 가능
+    const matched = await ClimbLogProblem.findAll({
+      where: cpWhere,
+      attributes: ['id'],
+      include: [
+        { model: Problem, as: 'problem', attributes: [], required: false },
+        { model: ClimbLog, as: 'log', required: true, where: climbLogWhere, attributes: [] },
+      ],
+      order: [[{ model: ClimbLog, as: 'log' }, 'visited_at', 'DESC'], ['id', 'DESC']],
+      subQuery: false,
+    });
+    const total = matched.length;
+    const pageIds = matched.slice(offset, offset + limit).map((m) => m.id);
+
+    let rows = [];
+    if (pageIds.length) {
+      rows = await ClimbLogProblem.findAll({
+        where: { id: pageIds },
+        include: [
+          { model: Problem, as: 'problem', attributes: ['id', 'level', 'color'], required: false },
+          {
+            model: ClimbLog, as: 'log', required: true,
+            include: [{ model: Gym, as: 'gym', attributes: ['id', 'name'], required: false }],
+          },
+          {
+            model: require('../models').ClimbLogProblemVideo, as: 'video_links', required: false,
+            include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'thumbnail_url'], required: false }],
+          },
+          { model: ClimbLogProblemPhoto, as: 'photos', required: false, attributes: ['id'] },
+        ],
+      });
+      // pageIds 순서로 정렬
+      const orderMap = new Map(pageIds.map((id, i) => [id, i]));
+      rows.sort((a, b) => orderMap.get(a.id) - orderMap.get(b.id));
+    }
+    const count = total;
+
+    const items = rows.map((p) => ({
+      id: p.id,
+      log_id: p.log_id,
+      visited_at: p.log?.visited_at,
+      gym_id: p.log?.gym_id,
+      gym_name: p.log?.gym?.name || null,
+      level: p.problem?.level || p.custom_level || '',
+      color: p.problem?.color || p.custom_color || '',
+      style: p.style,
+      cleared_count: p.cleared_count,
+      failed_count: p.failed_count,
+      is_cleared: p.is_cleared,
+      attempts: p.attempts,
+      videos: (p.video_links || []).map((v) => ({
+        id: v.id, ar_route_id: v.ar_route_id,
+        ar_route: v.ar_route ? v.ar_route.toJSON() : null,
+      })),
+      photo_count: (p.photos || []).length,
+    }));
+
+    return res.json({
+      success: true,
+      data: { items, total: count, limit, offset },
+      message: null,
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * POST /api/climb-logs/:logId/problems/:cpId/photos  (multipart `photo`)
+ * 볼더링 문제 사진 업로드. 본문에 hold_annotations(JSON), failure_tags(string), failure_memo(text) 동시 가능.
+ */
+async function uploadProblemPhoto(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId } = req.params;
+    const { ClimbLogProblemPhoto } = require('../models');
+    if (!req.file) return res.status(400).json({ success: false, data: null, message: '파일이 없습니다.' });
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    const photo_url = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
+    const photo = await ClimbLogProblemPhoto.create({
+      climb_log_problem_id: cp.id,
+      photo_url,
+      hold_annotations: req.body.hold_annotations || null,
+      failure_tags: req.body.failure_tags || null,
+      failure_memo: req.body.failure_memo || null,
+    });
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: photo.id, photo_url: photo.photo_url,
+        hold_annotations: photo.hold_annotations,
+        failure_tags: photo.failure_tags, failure_memo: photo.failure_memo,
+      },
+      message: '사진이 업로드되었습니다.',
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * PATCH /api/climb-logs/:logId/problems/:cpId/photos/:photoId
+ * 홀드 마킹 / 실패 태그 / 메모 갱신
+ */
+async function updateProblemPhoto(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId, photoId } = req.params;
+    const { ClimbLogProblemPhoto } = require('../models');
+    const photo = await ClimbLogProblemPhoto.findByPk(photoId);
+    if (!photo || Number(photo.climb_log_problem_id) !== Number(cpId)) {
+      return res.status(404).json({ success: false, data: null, message: '사진을 찾을 수 없습니다.' });
+    }
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    const updates = {};
+    if (req.body.hold_annotations !== undefined) updates.hold_annotations = req.body.hold_annotations;
+    if (req.body.failure_tags !== undefined) updates.failure_tags = req.body.failure_tags || null;
+    if (req.body.failure_memo !== undefined) updates.failure_memo = req.body.failure_memo || null;
+    if (!Object.keys(updates).length)
+      return res.status(400).json({ success: false, data: null, message: '수정할 항목이 없습니다.' });
+    await photo.update(updates);
+    return res.json({
+      success: true,
+      data: {
+        id: photo.id, photo_url: photo.photo_url,
+        hold_annotations: photo.hold_annotations,
+        failure_tags: photo.failure_tags, failure_memo: photo.failure_memo,
+      },
+      message: '사진이 수정되었습니다.',
+    });
+  } catch (err) { next(err); }
+}
+
+/**
+ * DELETE /api/climb-logs/:logId/problems/:cpId/photos/:photoId
+ */
+async function deleteProblemPhoto(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId, photoId } = req.params;
+    const { ClimbLogProblemPhoto } = require('../models');
+    const photo = await ClimbLogProblemPhoto.findByPk(photoId);
+    if (!photo || Number(photo.climb_log_problem_id) !== Number(cpId)) {
+      return res.status(404).json({ success: false, data: null, message: '사진을 찾을 수 없습니다.' });
+    }
+    const cp = await ClimbLogProblem.findByPk(cpId);
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) {
+      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    }
+    await photo.destroy();
+    return res.json({ success: true, data: null, message: '사진이 삭제되었습니다.' });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   getLogDates, getLogsByDate, getLogById, createLog, updateLog, deleteLog,
   updateLogProblem, deleteLogProblem,
   addLogProblem,
   uploadProblemVideo, removeProblemVideo,
+  uploadProblemPhoto, updateProblemPhoto, deleteProblemPhoto,
+  listLogProblems,
   getSummary,
 };

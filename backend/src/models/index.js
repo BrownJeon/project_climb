@@ -12,12 +12,14 @@ const ClimbLogProblem = require('./ClimbLogProblem');
 const GymPass = require('./GymPass');
 const GymPassPause = require('./GymPassPause');
 const ClimbLogProblemVideo = require('./ClimbLogProblemVideo');
+const ClimbLogProblemPhoto = require('./ClimbLogProblemPhoto');
 const UserMainGym = require('./UserMainGym');
 const TrainingGoal = require('./TrainingGoal');
 const TrainingSession = require('./TrainingSession');
 const TrainingSessionItem = require('./TrainingSessionItem');
 const TrainingPromptTemplate = require('./TrainingPromptTemplate');
 const TrainingAnalysis = require('./TrainingAnalysis');
+const TrainingRoutine = require('./TrainingRoutine');
 
 // User - Gym (deprecated 단일 main_gym_id, 호환 유지)
 User.belongsTo(Gym, { foreignKey: 'main_gym_id', as: 'mainGym' });
@@ -107,7 +109,7 @@ ClimbLog.belongsTo(Gym, { foreignKey: 'gym_id', as: 'gym' });
 
 // ClimbLog - ClimbLogProblem
 ClimbLog.hasMany(ClimbLogProblem, { foreignKey: 'log_id', as: 'problems', onDelete: 'CASCADE' });
-ClimbLogProblem.belongsTo(ClimbLog, { foreignKey: 'log_id' });
+ClimbLogProblem.belongsTo(ClimbLog, { foreignKey: 'log_id', as: 'log' });
 ClimbLogProblem.belongsTo(Problem, { foreignKey: 'problem_id', as: 'problem' });
 
 // GymPass - User, Gym
@@ -128,6 +130,10 @@ ArRoute.hasMany(ClimbLogProblem, { foreignKey: 'ar_route_id', as: 'climb_attempt
 ClimbLogProblem.hasMany(ClimbLogProblemVideo, { foreignKey: 'climb_log_problem_id', as: 'video_links', onDelete: 'CASCADE' });
 ClimbLogProblemVideo.belongsTo(ClimbLogProblem, { foreignKey: 'climb_log_problem_id' });
 ClimbLogProblemVideo.belongsTo(ArRoute, { foreignKey: 'ar_route_id', as: 'ar_route' });
+
+// ClimbLogProblem - ClimbLogProblemPhoto (사진 + 홀드 강조 + 실패 분석)
+ClimbLogProblem.hasMany(ClimbLogProblemPhoto, { foreignKey: 'climb_log_problem_id', as: 'photos', onDelete: 'CASCADE' });
+ClimbLogProblemPhoto.belongsTo(ClimbLogProblem, { foreignKey: 'climb_log_problem_id' });
 
 // 훈련 도메인
 User.hasMany(TrainingGoal, { foreignKey: 'user_id' });
@@ -154,8 +160,9 @@ TrainingAnalysis.belongsTo(TrainingPromptTemplate, {
 module.exports = {
   sequelize,
   User, Gym, Problem, ArRoute, Follow, Like, Comment, Bookmark,
-  ClimbLog, ClimbLogProblem, ClimbLogProblemVideo, GymPass, GymPassPause,
+  ClimbLog, ClimbLogProblem, ClimbLogProblemVideo, ClimbLogProblemPhoto, GymPass, GymPassPause,
   UserMainGym,
   TrainingGoal, TrainingSession, TrainingSessionItem,
   TrainingPromptTemplate, TrainingAnalysis,
+  TrainingRoutine,
 };

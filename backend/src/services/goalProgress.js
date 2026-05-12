@@ -40,7 +40,7 @@ async function computeBoulderingCurrent(userId, color, { targetGymId, targetBran
   if (targetGymId) climbLogWhere.gym_id = Number(targetGymId);
 
   const climbLogInclude = {
-    model: ClimbLog, required: true, attributes: [],
+    model: ClimbLog, as: 'log', required: true, attributes: [],
     where: climbLogWhere,
   };
   if (!targetGymId && targetBrand) {

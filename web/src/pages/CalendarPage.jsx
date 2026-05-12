@@ -4,7 +4,6 @@ import TopBar from '../components/TopBar';
 import { Btn, ColorBadge, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import { climbLogsApi } from '../api/climbLogs';
-import { useSessionAddModal } from '../contexts/SessionAddModalContext';
 import RecordActionMenu from '../components/RecordActionMenu';
 import RecordEditModal from '../components/modals/RecordEditModal';
 import ClearedSummary from '../components/ClearedSummary';
@@ -23,7 +22,6 @@ export default function CalendarPage() {
   const [logs, setLogs] = useState([]);
   const [editLog, setEditLog] = useState(null);
   const [reloadTick, setReloadTick] = useState(0);
-  const { open } = useSessionAddModal();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,6 +42,31 @@ export default function CalendarPage() {
       setReloadTick((t) => t + 1);
     } catch (e) {
       alert(e.message || '삭제 실패');
+    }
+  }
+
+  // 인라인 +/- — 낙관적 갱신, 실패 시 롤백
+  async function handleAdjustProblem(logId, problemId, field, delta) {
+    const prevSnapshot = logs;
+    const target = (prevSnapshot.find((l) => l.id === logId)?.problems || []).find((p) => p.id === problemId);
+    if (!target) return;
+    const cur = Number(target[field] != null ? target[field] : (field === 'cleared_count' && target.is_cleared ? 1 : 0));
+    const next = Math.max(0, cur + delta);
+    if (next === cur) return;
+
+    setLogs((prev) => prev.map((l) => l.id !== logId ? l : ({
+      ...l,
+      problems: (l.problems || []).map((p) => {
+        if (p.id !== problemId) return p;
+        return { ...p, [field]: next, ...(field === 'cleared_count' ? { is_cleared: next > 0 } : {}) };
+      }),
+    })));
+
+    try {
+      await climbLogsApi.updateProblem(logId, problemId, { [field]: next });
+    } catch (e) {
+      setLogs(prevSnapshot); // 롤백
+      alert(e?.response?.data?.message || e.message || '갱신 실패');
     }
   }
 
@@ -73,23 +96,9 @@ export default function CalendarPage() {
   const totalCleared = logs.reduce((acc, l) => acc + (l.problems || []).reduce((s, p) =>
     s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0), 0);
 
-  const addBtn = (
-    <button
-      onClick={() => open({ initialPrefill: { visited_at: ymd(year, month, selected) } })}
-      aria-label="기록 추가"
-      style={{
-        width: 36, height: 36, borderRadius: 'var(--r-pill)',
-        display: 'grid', placeItems: 'center',
-        color: 'var(--ink-2)', background: 'var(--surface-2)',
-      }}
-    >
-      {I.plus(18)}
-    </button>
-  );
-
   return (
     <>
-      <TopBar right={addBtn} />
+      <TopBar />
 
       {/* Month header */}
       <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
@@ -163,7 +172,7 @@ export default function CalendarPage() {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/logs/${log.id}`); }}
             style={{
               background: 'var(--surface)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r-md)', overflow: 'hidden', cursor: 'pointer',
+              borderRadius: 'var(--r-md)', cursor: 'pointer',
             }}>
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <div style={{ flex: 1 }}>
@@ -177,8 +186,12 @@ export default function CalendarPage() {
                   </div>
                 )}
                 {log.problems?.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <ClearedSummary problems={log.problems} />
+                  <div style={{ marginTop: 8, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                    <ClearedSummary
+                      problems={log.problems}
+                      editable
+                      onAdjust={(pid, field, delta) => handleAdjustProblem(log.id, pid, field, delta)}
+                    />
                   </div>
                 )}
               </div>

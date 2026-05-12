@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Btn, ColorBadge, RadioOpt, Checkbox, Stepper, Pill } from '../atoms';
 import { I } from '../atoms/Icons';
 import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
+import { STYLE_KEYS, styleMeta } from '../../utils/style';
 import { gymsApi } from '../../api/gyms';
 import { passesApi } from '../../api/passes';
 import { sessionsApi } from '../../api/sessions';
 import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '../TrainingItemFields';
 import TimeRangeField from '../TimeRangeField';
 import VideoLinkPicker from './VideoLinkPicker';
+import VideoChip from '../VideoChip';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
@@ -58,7 +60,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
     _id: Date.now() + Math.random(),
     category,
     // 볼더링
-    color: '', level: '',
+    color: '', level: '', style: '',
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
     // 지구력
@@ -96,6 +98,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
           video_mode: 'none',
         };
         if (a.color || a.level) row.new_problem = { color: a.color || null, level: a.level || null };
+        if (a.style) row.style = a.style;
         if (Array.isArray(a.ar_route_ids) && a.ar_route_ids.length) row.ar_route_ids = a.ar_route_ids;
         return row;
       }),
@@ -291,39 +294,48 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
                           </div>
                         )}
 
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>벽 형태</div>
+                          <select value={e.style || ''} onChange={(ev) => updateEntry(e._id, { style: ev.target.value })}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
+                            <option value="">선택 안 함</option>
+                            <optgroup label="단일">
+                              {['slab','vertical','overhang','cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
+                            </optgroup>
+                            <optgroup label="복합">
+                              {['slab_vertical','vertical_overhang','slab_overhang','overhang_cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
+                            </optgroup>
+                            <option value="other">{styleMeta('other').label}</option>
+                          </select>
+                        </div>
+
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>완등 (개)</div>
-                            <input type="number" min="0" step="1" inputMode="numeric"
-                              value={e.cleared_count ?? 0}
-                              onChange={(ev) => updateEntry(e._id, { cleared_count: ev.target.value.replace(/[^\d]/g, '') || 0 })}
-                              style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>실패 (개)</div>
-                            <input type="number" min="0" step="1" inputMode="numeric"
-                              value={e.failed_count ?? 0}
-                              onChange={(ev) => updateEntry(e._id, { failed_count: ev.target.value.replace(/[^\d]/g, '') || 0 })}
-                              style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }} />
-                          </div>
+                          <CountStepper
+                            label="완등 (개)" tone="success"
+                            value={Number(e.cleared_count) || 0}
+                            onChange={(v) => updateEntry(e._id, { cleared_count: v })}
+                          />
+                          <CountStepper
+                            label="실패 (개)" tone="danger"
+                            value={Number(e.failed_count) || 0}
+                            onChange={(v) => updateEntry(e._id, { failed_count: v })}
+                          />
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>연결된 영상 ({(e.ar_route_ids || []).length})</div>
                           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                             {(e.ar_routes || []).map((vid) => (
-                              <span key={vid.id} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                fontSize: 11, padding: '4px 9px', borderRadius: 'var(--r-pill)',
-                                background: 'var(--primary-soft)', color: 'var(--ink-1)',
-                                border: '1px solid var(--primary-line)', fontWeight: 600,
-                              }}>
-                                📹 {vid.title || `#${vid.id}`}
-                                <button type="button" onClick={() => updateEntry(e._id, {
+                              <VideoChip key={vid.id}
+                                id={vid.id} title={vid.title}
+                                thumbnail_url={vid.thumbnail_url}
+                                color={vid.color || e.color}
+                                level={vid.level || e.level}
+                                onRemove={() => updateEntry(e._id, {
                                   ar_route_ids: (e.ar_route_ids || []).filter((x) => x !== vid.id),
                                   ar_routes: (e.ar_routes || []).filter((x) => x.id !== vid.id),
-                                })} style={{ marginLeft: 2, color: 'var(--ink-3)' }}>×</button>
-                              </span>
+                                })}
+                              />
                             ))}
                             <button type="button" onClick={() => setPickerForRow(e._id)}
                               style={{
@@ -525,6 +537,50 @@ function FieldText({ label, value, onChange, placeholder, isLast }) {
       <span style={{ fontSize: 13, color: 'var(--ink-3)', width: 60 }}>{label}</span>
       <input value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder}
         style={{ flex: 1, fontSize: 13.5, fontWeight: value ? 600 : 500, color: value ? 'var(--ink-1)' : 'var(--ink-4)', border: 0, background: 'transparent', padding: 0 }} />
+    </div>
+  );
+}
+
+function CountStepper({ label, tone, value, onChange }) {
+  const color = tone === 'success' ? 'var(--success)' : 'var(--danger)';
+  const set = (v) => onChange(Math.max(0, v));
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>{label}</div>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '2px 4px', borderRadius: 'var(--r-sm)',
+        border: '1px solid var(--line)', background: 'var(--surface)',
+        minWidth: 0,
+      }}>
+        <button type="button" onClick={() => set(value - 1)} disabled={value <= 0}
+          aria-label="감소"
+          style={{
+            flexShrink: 0,
+            width: 24, height: 24, borderRadius: '50%',
+            border: 'none', background: 'var(--surface-2)',
+            color: value <= 0 ? 'var(--ink-4)' : 'var(--ink-2)',
+            fontSize: 14, fontWeight: 700, lineHeight: 1,
+            cursor: value <= 0 ? 'not-allowed' : 'pointer',
+          }}>−</button>
+        <input type="number" min="0" step="1" inputMode="numeric"
+          value={value}
+          onChange={(e) => set(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
+          style={{
+            flex: 1, minWidth: 0, width: '100%',
+            padding: '4px 0', fontSize: 13, fontWeight: 700,
+            border: 'none', outline: 'none', background: 'transparent',
+            color, textAlign: 'center',
+          }} />
+        <button type="button" onClick={() => set(value + 1)}
+          aria-label="증가"
+          style={{
+            flexShrink: 0,
+            width: 24, height: 24, borderRadius: '50%',
+            border: 'none', background: color, color: '#fff',
+            fontSize: 14, fontWeight: 700, lineHeight: 1, cursor: 'pointer',
+          }}>+</button>
+      </div>
     </div>
   );
 }

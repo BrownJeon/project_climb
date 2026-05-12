@@ -479,7 +479,7 @@ function AnalysisTab() {
                 </button>
               </div>
               <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
-                {(h.perspectives || []).map((k) => PERSPECTIVE_KO[k] || k).join(' · ') || '관점 없음'}
+                {(Array.isArray(h.perspectives) ? h.perspectives : (() => { try { return JSON.parse(h.perspectives || '[]'); } catch { return []; } })()).map((k) => PERSPECTIVE_KO[k] || k).join(' · ') || '관점 없음'}
               </div>
               <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 3 }}>
                 {h.duration_ms}ms · 템플릿 {h.template?.key || '-'} v{h.template?.version || '?'}

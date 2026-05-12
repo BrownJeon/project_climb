@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { optionalAuth } = require('../middleware/auth');
 const c = require('../controllers/trainingController');
+const r = require('../controllers/routineController');
 
 const router = Router();
 
@@ -21,6 +22,12 @@ router.post('/analyze', optionalAuth, c.analyze);
 router.get('/analyses', optionalAuth, c.listAnalyses);
 router.get('/analyses/:id', optionalAuth, c.getAnalysis);
 router.delete('/analyses/:id', optionalAuth, c.deleteAnalysis);
+
+// 루틴 플래너
+router.get('/routines', optionalAuth, r.listRoutines);
+router.post('/routines', optionalAuth, r.createRoutine);
+router.patch('/routines/:id', optionalAuth, r.updateRoutine);
+router.delete('/routines/:id', optionalAuth, r.deleteRoutine);
 
 // 메타 프롬프트 템플릿 조회 (운영자 보조)
 router.get('/prompt-templates', optionalAuth, c.listTemplates);

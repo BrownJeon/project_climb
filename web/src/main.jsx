@@ -16,6 +16,9 @@ import CalendarDetailPage from './pages/CalendarDetailPage';
 import LogDetailPage from './pages/LogDetailPage';
 import TrainingPage from './pages/TrainingPage';
 import MyPage from './pages/MyPage';
+import RecordsPage from './pages/RecordsPage';
+import GrowthPage from './pages/GrowthPage';
+import RoutinePage from './pages/RoutinePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -32,6 +35,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/calendar/:date" element={<CalendarDetailPage />} />
             <Route path="/logs/:id" element={<LogDetailPage />} />
+            <Route path="/records" element={<RecordsPage />} />
+            <Route path="/growth" element={<GrowthPage />} />
+            <Route path="/routine" element={<RoutinePage />} />
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/me" element={<MyPage />} />
             <Route path="*" element={<NotFoundPage />} />

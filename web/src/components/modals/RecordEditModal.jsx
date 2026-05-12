@@ -4,9 +4,12 @@ import { I } from '../atoms/Icons';
 import { climbLogsApi } from '../../api/climbLogs';
 import { trainingApi } from '../../api/training';
 import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
+import { STYLE_KEYS, styleMeta } from '../../utils/style';
 import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '../TrainingItemFields';
 import TimeRangeField from '../TimeRangeField';
 import VideoLinkPicker from './VideoLinkPicker';
+import VideoChip from '../VideoChip';
+import ProblemPhotoModal from './ProblemPhotoModal';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
@@ -67,11 +70,13 @@ function problemToEntry(p) {
     _origCleared: Number(p.cleared_count != null ? p.cleared_count : (p.is_cleared ? 1 : 0)),
     _origFailed: Number(p.failed_count != null ? p.failed_count : 0),
     _origVideoIds: [...ar_route_ids].sort().join(','),
+    _origStyle: p.style || '',
     category: 'bouldering',
-    color: p.color || '', level: p.level || '',
+    color: p.color || '', level: p.level || '', style: p.style || '',
     cleared_count: p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0),
     failed_count: p.failed_count != null ? Number(p.failed_count) : 0,
     ar_route_ids, ar_routes,
+    photos: p.photos || [],
     start_time: '', end_time: '', duration_minutes: '',
     endurance_level: '', cond_unit: 'count', cond_base: '', value: '', memo: '',
   };
@@ -110,6 +115,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
   }, [initial.problems, initial.training_sessions, kind]);
   const [entries, setEntries] = useState(initialEntries);
   const [pickerForRow, setPickerForRow] = useState(null);
+  const [photoTarget, setPhotoTarget] = useState(null); // { entryId, cpId, photo? }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -119,7 +125,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
     _id: `new-${Date.now()}-${Math.random()}`,
     _isNew: true, _pendingDelete: false,
     category,
-    color: '', level: '',
+    color: '', level: '', style: '',
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
     endurance_level: '',
@@ -143,6 +149,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
             if (!e.color && !e.level) continue;
             await climbLogsApi.addProblem(logId, {
               color: e.color || null, level: e.level || null,
+              style: e.style || null,
               cleared_count: Number(e.cleared_count) || 0,
               failed_count: Number(e.failed_count) || 0,
               ar_route_ids: Array.isArray(e.ar_route_ids) ? e.ar_route_ids : [],
@@ -167,6 +174,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
             const updates = {};
             if (cc !== e._origCleared) updates.cleared_count = cc;
             if (fc !== e._origFailed) updates.failed_count = fc;
+            if ((e.style || '') !== (e._origStyle || '')) updates.style = e.style || null;
             const videosChanged = newVid !== e._origVideoIds;
             if (Object.keys(updates).length || videosChanged) {
               await climbLogsApi.updateProblem(logId, e._existingProblemId, {
@@ -324,38 +332,48 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
                             자동 제목: {fmtRouteTitle(e.color, e.level)}
                           </div>
                         )}
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>벽 형태</div>
+                          <select value={e.style || ''} onChange={(ev) => updateEntry(e._id, { style: ev.target.value })}
+                            style={selectStyle}>
+                            <option value="">선택 안 함</option>
+                            <optgroup label="단일">
+                              {['slab','vertical','overhang','cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
+                            </optgroup>
+                            <optgroup label="복합">
+                              {['slab_vertical','vertical_overhang','slab_overhang','overhang_cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
+                            </optgroup>
+                            <option value="other">{styleMeta('other').label}</option>
+                          </select>
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>완등 (개)</div>
-                            <input type="number" min="0" step="1" inputMode="numeric"
-                              value={e.cleared_count ?? 0}
-                              onChange={(ev) => updateEntry(e._id, { cleared_count: ev.target.value.replace(/[^\d]/g, '') || 0 })}
-                              style={selectStyle} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>실패 (개)</div>
-                            <input type="number" min="0" step="1" inputMode="numeric"
-                              value={e.failed_count ?? 0}
-                              onChange={(ev) => updateEntry(e._id, { failed_count: ev.target.value.replace(/[^\d]/g, '') || 0 })}
-                              style={selectStyle} />
-                          </div>
+                          <CountStepper
+                            label="완등 (개)"
+                            tone="success"
+                            value={Number(e.cleared_count) || 0}
+                            onChange={(v) => updateEntry(e._id, { cleared_count: v })}
+                          />
+                          <CountStepper
+                            label="실패 (개)"
+                            tone="danger"
+                            value={Number(e.failed_count) || 0}
+                            onChange={(v) => updateEntry(e._id, { failed_count: v })}
+                          />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>연결된 영상 ({(e.ar_route_ids || []).length})</div>
                           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                             {(e.ar_routes || []).map((vid) => (
-                              <span key={vid.id} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                fontSize: 11, padding: '4px 9px', borderRadius: 'var(--r-pill)',
-                                background: 'var(--primary-soft)', color: 'var(--ink-1)',
-                                border: '1px solid var(--primary-line)', fontWeight: 600,
-                              }}>
-                                📹 {vid.title || `#${vid.id}`}
-                                <button type="button" onClick={() => updateEntry(e._id, {
+                              <VideoChip key={vid.id}
+                                id={vid.id} title={vid.title}
+                                thumbnail_url={vid.thumbnail_url}
+                                color={vid.color || e.color}
+                                level={vid.level || e.level}
+                                onRemove={() => updateEntry(e._id, {
                                   ar_route_ids: (e.ar_route_ids || []).filter((x) => x !== vid.id),
                                   ar_routes: (e.ar_routes || []).filter((x) => x.id !== vid.id),
-                                })} style={{ marginLeft: 2, color: 'var(--ink-3)' }}>×</button>
-                              </span>
+                                })}
+                              />
                             ))}
                             <button type="button" onClick={() => setPickerForRow(e._id)}
                               style={{
@@ -366,6 +384,42 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
                               }}>+ 영상 연결</button>
                           </div>
                         </div>
+
+                        {/* 사진 분석 — 기존 항목만 (id 필요) */}
+                        {e._existingProblemId && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                            <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>문제 사진 ({(e.photos || []).length})</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {(e.photos || []).map((ph) => (
+                                <button key={ph.id} type="button"
+                                  onClick={() => setPhotoTarget({ entryId: e._id, cpId: e._existingProblemId, photo: ph })}
+                                  style={{
+                                    width: 56, height: 56, padding: 0, borderRadius: 'var(--r-sm)',
+                                    overflow: 'hidden', border: '1px solid var(--line)',
+                                    background: `#000 center/cover no-repeat url("${ph.photo_url}")`,
+                                    cursor: 'pointer', position: 'relative',
+                                  }}>
+                                  {(ph.failure_tags || ph.failure_memo) && (
+                                    <span style={{
+                                      position: 'absolute', bottom: 2, right: 2,
+                                      fontSize: 9, padding: '1px 4px', borderRadius: 'var(--r-pill)',
+                                      background: 'var(--danger)', color: '#fff', fontWeight: 700,
+                                    }}>분석</span>
+                                  )}
+                                </button>
+                              ))}
+                              <button type="button"
+                                onClick={() => setPhotoTarget({ entryId: e._id, cpId: e._existingProblemId, photo: null })}
+                                style={{
+                                  width: 56, height: 56,
+                                  fontSize: 11, fontWeight: 600, color: 'var(--primary)',
+                                  borderRadius: 'var(--r-sm)',
+                                  border: '1px dashed var(--line-2)', background: 'var(--surface)',
+                                  cursor: 'pointer',
+                                }}>+ 사진</button>
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <TrainingItemFields row={e} onPatch={(patch) => updateEntry(e._id, patch)} />
@@ -416,6 +470,71 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
           />
         );
       })()}
+
+      {photoTarget && (
+        <ProblemPhotoModal
+          logId={logId}
+          cpId={photoTarget.cpId}
+          photo={photoTarget.photo}
+          onSaved={(saved) => {
+            updateEntry(photoTarget.entryId, {
+              photos: photoTarget.photo
+                ? (entries.find((x) => x._id === photoTarget.entryId)?.photos || []).map((ph) => ph.id === saved.id ? saved : ph)
+                : [...(entries.find((x) => x._id === photoTarget.entryId)?.photos || []), saved],
+            });
+          }}
+          onDeleted={(photoId) => {
+            updateEntry(photoTarget.entryId, {
+              photos: (entries.find((x) => x._id === photoTarget.entryId)?.photos || []).filter((ph) => ph.id !== photoId),
+            });
+          }}
+          onClose={() => setPhotoTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CountStepper({ label, tone, value, onChange }) {
+  const color = tone === 'success' ? 'var(--success)' : 'var(--danger)';
+  const set = (v) => onChange(Math.max(0, v));
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>{label}</div>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '2px 4px', borderRadius: 'var(--r-sm)',
+        border: '1px solid var(--line)', background: 'var(--surface)',
+        minWidth: 0,
+      }}>
+        <button type="button" onClick={() => set(value - 1)} disabled={value <= 0}
+          aria-label="감소"
+          style={{
+            flexShrink: 0,
+            width: 24, height: 24, borderRadius: '50%',
+            border: 'none', background: 'var(--surface-2)',
+            color: value <= 0 ? 'var(--ink-4)' : 'var(--ink-2)',
+            fontSize: 14, fontWeight: 700, lineHeight: 1,
+            cursor: value <= 0 ? 'not-allowed' : 'pointer',
+          }}>−</button>
+        <input type="number" min="0" step="1" inputMode="numeric"
+          value={value}
+          onChange={(e) => set(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
+          style={{
+            flex: 1, minWidth: 0, width: '100%',
+            padding: '4px 0', fontSize: 13, fontWeight: 700,
+            border: 'none', outline: 'none', background: 'transparent',
+            color, textAlign: 'center',
+          }} />
+        <button type="button" onClick={() => set(value + 1)}
+          aria-label="증가"
+          style={{
+            flexShrink: 0,
+            width: 24, height: 24, borderRadius: '50%',
+            border: 'none', background: color, color: '#fff',
+            fontSize: 14, fontWeight: 700, lineHeight: 1, cursor: 'pointer',
+          }}>+</button>
+      </div>
     </div>
   );
 }

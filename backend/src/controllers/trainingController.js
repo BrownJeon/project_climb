@@ -3,6 +3,7 @@ const {
   TrainingGoal, TrainingSession, TrainingSessionItem,
   TrainingPromptTemplate, TrainingAnalysis,
   ClimbLog, ClimbLogProblem, Problem, Gym,
+  ClimbLogProblemVideo, ArRoute,
 } = require('../models');
 const trainingAnalyzer = require('../services/trainingAnalyzer');
 const { recomputeUserGoals } = require('../services/goalProgress');
@@ -158,7 +159,14 @@ async function listSessions(req, res, next) {
           { model: Gym, as: 'gym', attributes: ['id', 'name'] },
           {
             model: ClimbLogProblem, as: 'problems',
-            include: [{ model: Problem, as: 'problem', attributes: ['color', 'level'], required: false }],
+            include: [
+              { model: Problem, as: 'problem', attributes: ['color', 'level'], required: false },
+              { model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url'], required: false },
+              {
+                model: ClimbLogProblemVideo, as: 'video_links', required: false,
+                include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url', 'color', 'level'], required: false }],
+              },
+            ],
           },
         ],
       });
@@ -177,6 +185,17 @@ async function listSessions(req, res, next) {
           level: p.problem?.level || p.custom_level || null,
           is_cleared: !!p.is_cleared,
           attempts: p.attempts,
+          cleared_count: p.cleared_count,
+          failed_count: p.failed_count,
+          style: p.style,
+          ar_route_id: p.ar_route_id,
+          ar_route: p.ar_route ? p.ar_route.toJSON() : null,
+          videos: (p.video_links || []).map((v) => ({
+            id: v.id,
+            ar_route_id: v.ar_route_id,
+            sort_order: v.sort_order,
+            ar_route: v.ar_route ? v.ar_route.toJSON() : null,
+          })),
         })),
         items: (cl.problems || []).map((p) => ({
           exercise_name: `볼더링 시도 (${p.problem?.color || p.custom_color || '?'}/${p.problem?.level || p.custom_level || '?'})`,
@@ -307,7 +326,12 @@ function formatAnalysisRow(saved) {
     id: saved.id,
     from: saved.period_from,
     to: saved.period_to,
-    perspectives: saved.perspectives,
+    perspectives: (() => {
+      const p = saved.perspectives;
+      if (Array.isArray(p)) return p;
+      if (typeof p === 'string') { try { return JSON.parse(p); } catch { return []; } }
+      return [];
+    })(),
     engine: saved.engine,
     cli_version: saved.cli_version,
     template: saved.template_key
@@ -430,13 +454,19 @@ async function listAnalyses(req, res, next) {
       order: [['created_at', 'DESC']],
       limit, offset,
     });
-    const analyses = rows.map((r) => ({
-      id: r.id, from: r.period_from, to: r.period_to,
-      perspectives: r.perspectives,
-      duration_ms: r.duration_ms,
-      created_at: r.created_at,
-      template: r.template_key ? { key: r.template_key, version: r.template_version } : null,
-    }));
+    const analyses = rows.map((r) => {
+      let perspectives = r.perspectives;
+      if (typeof perspectives === 'string') {
+        try { perspectives = JSON.parse(perspectives); } catch { perspectives = []; }
+      }
+      return {
+        id: r.id, from: r.period_from, to: r.period_to,
+        perspectives: perspectives || [],
+        duration_ms: r.duration_ms,
+        created_at: r.created_at,
+        template: r.template_key ? { key: r.template_key, version: r.template_version } : null,
+      };
+    });
     return res.json({ success: true, data: { analyses, total: count, limit, offset }, message: null });
   } catch (e) { next(e); }
 }

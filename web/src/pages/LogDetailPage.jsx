@@ -5,6 +5,7 @@ import { ColorBadge, Pill, Btn } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import { climbLogsApi } from '../api/climbLogs';
 import RecordEditModal from '../components/modals/RecordEditModal';
+import { failureTagLabel, parseFailureTags } from '../utils/failureTags';
 import { fmtDuration, normalizeTime } from '../components/TimeRangeField';
 
 export default function LogDetailPage() {
@@ -148,6 +149,9 @@ export default function LogDetailPage() {
                   }}
                 />
               ))}
+              {(p.photos || []).map((ph) => (
+                <PhotoAnalysis key={ph.id} photo={ph} />
+              ))}
             </div>
           );
         })}
@@ -189,5 +193,55 @@ export default function LogDetailPage() {
         />
       )}
     </>
+  );
+}
+
+function PhotoAnalysis({ photo }) {
+  const ann = Array.isArray(photo.hold_annotations) ? photo.hold_annotations
+    : (typeof photo.hold_annotations === 'string' ? (() => {
+      try { return JSON.parse(photo.hold_annotations); } catch { return []; }
+    })() : []);
+  const tags = parseFailureTags(photo.failure_tags);
+  return (
+    <div style={{ borderTop: '1px solid var(--line)' }}>
+      <div style={{ position: 'relative', background: '#000' }}>
+        <img src={photo.photo_url} alt="문제 사진"
+          style={{ width: '100%', display: 'block' }} />
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+          {ann.map((a, i) => {
+            const stroke = a.color || '#ef4444';
+            const sw = a.stroke || 3;
+            if (a.type === 'circle') {
+              return <circle key={i} cx={`${a.x}%`} cy={`${a.y}%`} r={`${a.r}%`} fill="none" stroke={stroke} strokeWidth={sw} />;
+            }
+            if (a.type === 'rect') {
+              return <rect key={i} x={`${a.x}%`} y={`${a.y}%`} width={`${a.w}%`} height={`${a.h}%`} fill="none" stroke={stroke} strokeWidth={sw} />;
+            }
+            return null;
+          })}
+        </svg>
+      </div>
+      {(tags.length > 0 || photo.failure_memo) && (
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {tags.length > 0 && (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {tags.map((t) => (
+                <span key={t} style={{
+                  fontSize: 11, fontWeight: 600,
+                  padding: '3px 9px', borderRadius: 'var(--r-pill)',
+                  background: 'var(--surface-2)', color: 'var(--ink-2)',
+                  border: '1px solid var(--line-2)',
+                }}>{failureTagLabel(t)}</span>
+              ))}
+            </div>
+          )}
+          {photo.failure_memo && (
+            <div style={{ fontSize: 12.5, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
+              {photo.failure_memo}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

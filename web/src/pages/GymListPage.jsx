@@ -113,22 +113,32 @@ export default function GymListPage() {
   }, [debouncedQ, reloadTick, filterChip, coords]);
 
   const addBtn = (
-    <button
-      onClick={() => setAddOpen(true)}
-      aria-label="새 암장 등록"
-      style={{
-        width: 36, height: 36, borderRadius: 'var(--r-pill)',
-        display: 'grid', placeItems: 'center',
-        color: 'var(--ink-2)', background: 'var(--surface-2)',
-      }}
-    >
-      {I.plus(18)}
-    </button>
+    <div style={{ display: 'flex', gap: 6 }}>
+      <button onClick={() => nav('/me')} aria-label="뒤로"
+        style={{
+          width: 36, height: 36, borderRadius: 'var(--r-pill)',
+          display: 'grid', placeItems: 'center',
+          color: 'var(--ink-2)', background: 'var(--surface-2)',
+        }}>
+        {I.chev(16, 'left')}
+      </button>
+      <button
+        onClick={() => setAddOpen(true)}
+        aria-label="새 암장 등록"
+        style={{
+          width: 36, height: 36, borderRadius: 'var(--r-pill)',
+          display: 'grid', placeItems: 'center',
+          color: 'var(--ink-2)', background: 'var(--surface-2)',
+        }}
+      >
+        {I.plus(18)}
+      </button>
+    </div>
   );
 
   return (
     <>
-      <TopBar title="기록" right={addBtn} />
+      <TopBar title="암장 관리" right={addBtn} />
 
       <div style={{ padding: '12px 16px' }}>
         {/* Search */}

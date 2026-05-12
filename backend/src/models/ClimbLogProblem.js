@@ -47,6 +47,10 @@ const ClimbLogProblem = sequelize.define('ClimbLogProblem', {
     type: DataTypes.INTEGER.UNSIGNED, allowNull: true,
     comment: '난이도별 실패 개수 (신규 흐름)',
   },
+  style: {
+    type: DataTypes.STRING(20), allowNull: true,
+    comment: '볼더링 카테고리: slab/vertical/overhang/cave/other',
+  },
 }, {
   tableName: 'climb_log_problems',
   timestamps: false,

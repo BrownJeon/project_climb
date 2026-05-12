@@ -1,16 +1,22 @@
 const { Router } = require('express');
 const { optionalAuth } = require('../middleware/auth');
-const { videoUpload } = require('../middleware/upload');
+const { videoUpload, imageUpload } = require('../middleware/upload');
 const {
   getLogDates, getLogsByDate, getLogById, createLog, updateLog, deleteLog,
   updateLogProblem, deleteLogProblem, addLogProblem,
-  uploadProblemVideo, removeProblemVideo, getSummary,
+  uploadProblemVideo, removeProblemVideo,
+  uploadProblemPhoto, updateProblemPhoto, deleteProblemPhoto,
+  listLogProblems,
+  getSummary,
 } = require('../controllers/climbLogController');
 
 const router = Router();
 
 // GET /api/climb-logs/summary?from=&to=
 router.get('/summary', optionalAuth, getSummary);
+
+// GET /api/climb-logs/problems?from=&to=&gym_id=&color=&level=&style=&limit=&offset=
+router.get('/problems', optionalAuth, listLogProblems);
 
 // GET /api/climb-logs/visited-gyms — 사용자가 방문한 distinct gym_id 목록 (최신순)
 router.get('/visited-gyms', optionalAuth, async (req, res, next) => {
@@ -49,5 +55,8 @@ router.patch('/:logId/problems/:cpId', optionalAuth, updateLogProblem);
 router.delete('/:logId/problems/:cpId', optionalAuth, deleteLogProblem);
 router.post('/:logId/problems/:cpId/video', optionalAuth, videoUpload.single('video'), uploadProblemVideo);
 router.delete('/:logId/problems/:cpId/video', optionalAuth, removeProblemVideo);
+router.post('/:logId/problems/:cpId/photos', optionalAuth, imageUpload.single('photo'), uploadProblemPhoto);
+router.patch('/:logId/problems/:cpId/photos/:photoId', optionalAuth, updateProblemPhoto);
+router.delete('/:logId/problems/:cpId/photos/:photoId', optionalAuth, deleteProblemPhoto);
 
 module.exports = router;

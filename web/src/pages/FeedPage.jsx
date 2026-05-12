@@ -6,6 +6,8 @@ import { I } from '../components/atoms/Icons';
 import { routesApi } from '../api/routes';
 import { climbLogsApi } from '../api/climbLogs';
 import { colorMeta } from '../utils/colors';
+import { routineApi } from '../api/routine';
+import { useNavigate } from 'react-router-dom';
 
 // 이번 주 월요일~일요일 (KST 기준)
 function getWeekRange(now = new Date()) {
@@ -56,7 +58,9 @@ export default function FeedPage() {
   const [allRoutes, setAllRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ visits: 0, dates: [], total_cleared: 0, cleared_breakdown: [], training_by_category: {} });
+  const [todayRoutines, setTodayRoutines] = useState([]);
   const week = useMemo(() => getWeekRange(), []);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setLoading(true);
@@ -69,6 +73,10 @@ export default function FeedPage() {
     climbLogsApi.summary(week.from, week.to)
       .then((r) => setSummary(r.data || { visits: 0, dates: [], total_cleared: 0, cleared_breakdown: [], training_by_category: {} }))
       .catch(() => {});
+    routineApi.list().then((r) => {
+      const dow = new Date().getDay();
+      setTodayRoutines(r.data?.routines?.[dow]?.items || []);
+    }).catch(() => {});
   }, [week.from, week.to]);
 
   const routes = useMemo(() => {
@@ -140,6 +148,50 @@ export default function FeedPage() {
           </div>
         </div>
       </div>
+
+      {/* 오늘의 루틴 */}
+      {todayRoutines.length > 0 && (
+        <div style={{ padding: '0 16px 8px' }}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--line)',
+            borderRadius: 'var(--r-md)', overflow: 'hidden',
+          }}>
+            <button onClick={() => navigate('/routine')} style={{
+              width: '100%', padding: '10px 14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'var(--surface-2)', borderBottom: '1px solid var(--line)',
+              cursor: 'pointer',
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)' }}>오늘의 루틴</span>
+              <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>전체 보기 →</span>
+            </button>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {todayRoutines.map((item, idx) => {
+                const CATEGORIES = [['bouldering','볼더링'],['endurance','지구력'],['conditioning','컨디셔닝'],['general','기타'],['rest','휴식']];
+                const catLabel = CATEGORIES.find(([k]) => k === item.category)?.[1] || item.category;
+                return (
+                  <div key={item.id} style={{
+                    padding: '9px 14px', fontSize: 12.5, color: 'var(--ink-2)', fontWeight: 600,
+                    borderBottom: idx < todayRoutines.length - 1 ? '1px solid var(--line)' : 'none',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <span style={{
+                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                      background: item.category === 'bouldering' ? 'var(--primary)'
+                        : item.category === 'endurance' ? 'var(--success)'
+                        : item.category === 'conditioning' ? 'var(--warn)'
+                        : 'var(--ink-4)',
+                    }} />
+                    <span>{catLabel}</span>
+                    {item.target_count && <span className="tabnum" style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500, marginLeft: 2 }}>목표 {item.target_count}회</span>}
+                    {item.target_minutes && <span className="tabnum" style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 500, marginLeft: 2 }}>목표 {item.target_minutes}분</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 18, padding: '10px 16px 4px', borderBottom: '1px solid var(--line)' }}>

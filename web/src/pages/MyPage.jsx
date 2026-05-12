@@ -157,6 +157,22 @@ export default function MyPage() {
         </div>
       </div>
 
+      {/* 암장 관리 진입 */}
+      <div style={{ padding: '0 16px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
+        <Link to="/gyms" style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '14px 0', textDecoration: 'none', color: 'inherit',
+        }}>
+          <span style={{
+            width: 36, height: 36, borderRadius: 'var(--r-pill)',
+            background: 'var(--surface-2)', color: 'var(--ink-2)',
+            display: 'grid', placeItems: 'center',
+          }}>{I.map(18)}</span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>암장 관리</span>
+          <span style={{ color: 'var(--ink-4)' }}>{I.chev(14)}</span>
+        </Link>
+      </div>
+
       {/* Passes section (프로필 정보 아래 별도 영역) */}
       <div style={{
         padding: '14px 16px', background: 'var(--surface)',

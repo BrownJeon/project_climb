@@ -33,7 +33,7 @@ export default function RecordActionMenu({ onEdit, onDelete, disabled = false, d
       </button>
       {open && (
         <div role="menu" style={{
-          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30,
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 120,
           minWidth: 132, background: 'var(--surface)',
           border: '1px solid var(--line)', borderRadius: 'var(--r-md)',
           boxShadow: '0 6px 20px rgba(0,0,0,.08)', overflow: 'hidden',

@@ -133,4 +133,17 @@ export const I = {
       <path d="M12 3c2 4 5 5 5 9a5 5 0 11-10 0c0-2 1-3 2-4-1 4 2 4 2 4s-2-3 1-9z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
     </svg>
   ),
+  barChart: (s = 22) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="12" width="4" height="9" rx="1" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="10" y="7" width="4" height="14" rx="1" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="17" y="3" width="4" height="18" rx="1" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  ),
+  checkSquare: (s = 22) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M7 12l4 4 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
 };
