@@ -26,6 +26,8 @@ function itemsToTrainingRow(category, items, duration_minutes, memo, start_time,
     category: category || 'general',
     exercise_color: '', exercise_level: '',
     endurance_level: '',
+    endurance_cleared: false,
+    endurance_attempts: '',
     cond_unit: 'count', cond_base: '',
     value: '',
     duration_minutes: duration_minutes ?? '',
@@ -41,6 +43,8 @@ function itemsToTrainingRow(category, items, duration_minutes, memo, start_time,
   } else if (category === 'endurance') {
     const m = (it.exercise_name || '').match(/\((5\.[\w.]+)\)/);
     if (m) row.endurance_level = m[1];
+    row.endurance_cleared = it.sets != null ? it.sets >= 1 : false;
+    row.endurance_attempts = it.reps_or_seconds != null ? String(it.reps_or_seconds) : '';
   } else if (category === 'conditioning') {
     row.cond_base = it.exercise_name || '';
     row.cond_unit = it.metric_unit === '초' ? 'time' : 'count';
@@ -129,6 +133,8 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
     endurance_level: '',
+    endurance_cleared: false,
+    endurance_attempts: '',
     cond_unit: 'count', cond_base: '', value: '',
     start_time: '', end_time: '', duration_minutes: '',
     memo: '',

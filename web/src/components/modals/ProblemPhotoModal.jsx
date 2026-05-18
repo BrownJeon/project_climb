@@ -30,6 +30,7 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
   const imgWrapRef = useRef(null);
+  const drawingRef = useRef(null); // stale closure 방지용 ref
 
   useEffect(() => {
     if (!pendingFile) return;
@@ -60,40 +61,53 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
     if (tool === 'select' || !previewUrl) return;
     const pt = clientToPercent(e);
     if (!pt) return;
-    e.preventDefault();
+    // Touch 객체는 preventDefault()가 없으므로 touch wrapper에서 호출, 여기서는 생략
     if (tool === 'circle') {
       const next = { type: 'circle', x: pt.x, y: pt.y, r: 0, color, stroke: 3 };
-      setAnnotations((arr) => [...arr, next]);
-      setDrawing({ idx: annotations.length, startX: pt.x, startY: pt.y });
+      const d = { startX: pt.x, startY: pt.y, _pending: true };
+      drawingRef.current = d;
+      setAnnotations((arr) => {
+        d.idx = arr.length;
+        drawingRef.current = { ...d };
+        return [...arr, next];
+      });
+      setDrawing({ ...d });
     } else if (tool === 'rect') {
       const next = { type: 'rect', x: pt.x, y: pt.y, w: 0, h: 0, color, stroke: 3 };
-      setAnnotations((arr) => [...arr, next]);
-      setDrawing({ idx: annotations.length, startX: pt.x, startY: pt.y });
+      const d = { startX: pt.x, startY: pt.y, _pending: true };
+      drawingRef.current = d;
+      setAnnotations((arr) => {
+        d.idx = arr.length;
+        drawingRef.current = { ...d };
+        return [...arr, next];
+      });
+      setDrawing({ ...d });
     }
   }
   function onMove(e) {
-    if (!drawing) return;
+    const d = drawingRef.current;
+    if (!d || d.idx == null) return;
     const pt = clientToPercent(e);
     if (!pt) return;
     setAnnotations((arr) => arr.map((a, i) => {
-      if (i !== drawing.idx) return a;
+      if (i !== d.idx) return a;
       if (a.type === 'circle') {
-        const dx = pt.x - drawing.startX, dy = pt.y - drawing.startY;
+        const dx = pt.x - d.startX, dy = pt.y - d.startY;
         return { ...a, r: Math.sqrt(dx * dx + dy * dy) };
       }
       if (a.type === 'rect') {
         return {
           ...a,
-          x: Math.min(drawing.startX, pt.x),
-          y: Math.min(drawing.startY, pt.y),
-          w: Math.abs(pt.x - drawing.startX),
-          h: Math.abs(pt.y - drawing.startY),
+          x: Math.min(d.startX, pt.x),
+          y: Math.min(d.startY, pt.y),
+          w: Math.abs(pt.x - d.startX),
+          h: Math.abs(pt.y - d.startY),
         };
       }
       return a;
     }));
   }
-  function onUp() { setDrawing(null); }
+  function onUp() { drawingRef.current = null; setDrawing(null); }
 
   function removeAnnotation(idx) {
     setAnnotations((arr) => arr.filter((_, i) => i !== idx));
@@ -181,9 +195,10 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
           ) : (
             <>
               <div ref={imgWrapRef}
-                onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-                onTouchStart={(e) => onDown(e.touches[0])}
-                onTouchMove={(e) => onMove(e.touches[0])}
+                onMouseDown={(e) => { e.preventDefault(); onDown(e); }}
+                onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+                onTouchStart={(e) => { e.preventDefault(); onDown(e.touches[0]); }}
+                onTouchMove={(e) => { e.preventDefault(); onMove(e.touches[0]); }}
                 onTouchEnd={onUp}
                 style={{
                   position: 'relative', width: '100%', maxHeight: '60vh',

@@ -134,7 +134,11 @@ function GoalsTab({ reloadTick = 0 }) {
           )}
           {g.category === 'endurance' && (g.metric_label || g.current_metric_label) && (
             <div style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 8 }}>
-              난이도 <b>{g.current_metric_label || '-'}</b> → <b>{g.metric_label || '-'}</b>
+              {g.current_metric_label && <><b>{g.current_metric_label}</b> → </>}
+              {g.metric_label && <><b>{g.metric_label}</b></>}
+              {g.target_value != null && (
+                <> · 완등 <b className="tabnum">{parseInt(g.current_value, 10) || 0}</b> / <b className="tabnum">{parseInt(g.target_value, 10) || 0}</b>회</>
+              )}
             </div>
           )}
           {g.category === 'conditioning' && (g.metric_label || g.target_value != null) && (

@@ -89,9 +89,12 @@ export default function FeedPage() {
       attempts: r.attempts ?? null,
       likes: r.like_count ?? r.likes ?? 0,
       bookmarks: r.bookmarks ?? 0,
+      saved: r.isBookmarked ?? false,
     }));
     return filterRoutes(flat, filter);
   }, [allRoutes, filter]);
+
+
 
   const dayCells = useMemo(() => {
     const set = new Set(summary.dates || []);

@@ -37,6 +37,7 @@ export default function RoutinePage() {
   const [weekClimbs, setWeekClimbs] = useState(null);
   const [editingDay, setEditingDay] = useState(null); // null = 조회 모드, dow = 편집 중
   const [addingDay, setAddingDay] = useState(null);
+  const [editingItemId, setEditingItemId] = useState(null);
   const [reloadTick, setReloadTick] = useState(0);
   const today = new Date().getDay();
 
@@ -97,8 +98,8 @@ export default function RoutinePage() {
   }
 
   function toggleEdit(dow) {
-    if (editingDay === dow) { setEditingDay(null); setAddingDay(null); }
-    else { setEditingDay(dow); setAddingDay(null); }
+    if (editingDay === dow) { setEditingDay(null); setAddingDay(null); setEditingItemId(null); }
+    else { setEditingDay(dow); setAddingDay(null); setEditingItemId(null); }
   }
 
   return (
@@ -153,6 +154,7 @@ export default function RoutinePage() {
                 const ach = getAchievement(item);
                 const catLabel = CATEGORIES.find(([k]) => k === item.category)?.[1] || item.category;
                 const desc = itemDesc(item);
+                const isEditingThis = editingItemId === item.id;
                 return (
                   <div key={item.id} style={{
                     padding: '10px 14px',
@@ -170,10 +172,17 @@ export default function RoutinePage() {
                         }}>{ach.pct}%</span>
                       )}
                       {isEditing && (
-                        <button onClick={() => handleDelete(item.id)}
-                          style={{ color: 'var(--danger)', padding: 4, flexShrink: 0 }}>
-                          {I.trash(13)}
-                        </button>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                          <button
+                            onClick={() => setEditingItemId(isEditingThis ? null : item.id)}
+                            style={{ color: isEditingThis ? 'var(--primary)' : 'var(--ink-3)', padding: 4 }}>
+                            {I.pencil(13)}
+                          </button>
+                          <button onClick={() => handleDelete(item.id)}
+                            style={{ color: 'var(--danger)', padding: 4 }}>
+                            {I.trash(13)}
+                          </button>
+                        </div>
                       )}
                     </div>
                     {!isEditing && ach && (
@@ -182,6 +191,15 @@ export default function RoutinePage() {
                           width: `${ach.pct}%`, height: '100%', borderRadius: 2, transition: 'width .4s',
                           background: ach.pct >= 100 ? 'var(--success)' : 'var(--primary)',
                         }} />
+                      </div>
+                    )}
+                    {isEditing && isEditingThis && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+                        <EditRoutineForm
+                          item={item}
+                          onSaved={() => { setEditingItemId(null); setReloadTick((t) => t + 1); }}
+                          onCancel={() => setEditingItemId(null)}
+                        />
                       </div>
                     )}
                   </div>
@@ -270,6 +288,113 @@ function AddRoutineForm({ day, onSaved, onCancel }) {
           {CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
       </div>
+      {category === 'bouldering' && (<>
+        <div><div style={lbl}>목표 색상</div>
+          <select value={targetColor} onChange={(e) => setTargetColor(e.target.value)} style={inp}>
+            <option value="">전체</option>
+            {COLOR_KEYS.map((k) => { const m = colorMeta(k); return <option key={k} value={k}>{m.kr} {m.label}</option>; })}
+          </select>
+        </div>
+        <div><div style={lbl}>V등급 (선택)</div>
+          <select value={vLevel} onChange={(e) => setVLevel(e.target.value)} style={inp}>
+            <option value="">전체</option>
+            {V_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div><div style={lbl}>목표 완등 횟수 (회)</div>
+          <input type="number" min="1" inputMode="numeric" value={boulderCount}
+            onChange={(e) => setBoulderCount(e.target.value)} style={inp} />
+        </div>
+      </>)}
+      {category === 'endurance' && (<>
+        <div><div style={lbl}>목표 난이도 (5.x)</div>
+          <select value={ydsLevel} onChange={(e) => setYdsLevel(e.target.value)} style={inp}>
+            <option value="">선택</option>
+            {YDS_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div><div style={lbl}>주간 목표 횟수 (회)</div>
+          <input type="number" min="1" inputMode="numeric" value={enduranceCount}
+            onChange={(e) => setEnduranceCount(e.target.value)} style={inp} />
+        </div>
+      </>)}
+      {category === 'conditioning' && (<>
+        <div><div style={lbl}>측정 유형</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[['count','횟수 (회)'],['time','시간 (초)']].map(([k,l]) => (
+              <button key={k} type="button" onClick={() => setCondUnit(k)} style={{
+                flex:1, padding:'9px 12px', borderRadius:'var(--r-sm)', fontSize:13,
+                border:'1px solid '+(condUnit===k?'var(--primary)':'var(--line-2)'),
+                background:condUnit===k?'var(--primary-soft)':'var(--surface)',
+                color:condUnit===k?'var(--primary-ink)':'var(--ink-2)',
+                fontWeight:condUnit===k?700:500,
+              }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div><div style={lbl}>트레이닝 종목</div>
+          <input value={condBase} onChange={(e) => setCondBase(e.target.value)}
+            placeholder={condUnit==='time'?'예: 행오프 / 데드행':'예: 푸시업 / 풀업'} style={inp} />
+        </div>
+        <div><div style={lbl}>{condUnit==='time'?'목표 시간 (초)':'목표 횟수 (회)'}</div>
+          <input type="number" min="1" inputMode="numeric" value={condValue}
+            onChange={(e) => setCondValue(e.target.value)} style={inp} />
+        </div>
+      </>)}
+      {category === 'general' && (
+        <div><div style={lbl}>내용</div>
+          <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={2}
+            placeholder="자유롭게 입력" style={{...inp, resize:'vertical', fontFamily:'inherit'}} />
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Btn variant="primary" full disabled={saving} onClick={save}>{saving ? '저장 중...' : '저장'}</Btn>
+        <Btn variant="ghost" full onClick={onCancel}>취소</Btn>
+      </div>
+    </div>
+  );
+}
+
+function EditRoutineForm({ item, onSaved, onCancel }) {
+  const [targetColor, setTargetColor] = useState(item.target_color || '');
+  const [vLevel, setVLevel] = useState(item.category === 'bouldering' ? (item.label || '') : '');
+  const [boulderCount, setBoulderCount] = useState(item.category === 'bouldering' ? (item.target_count != null ? String(item.target_count) : '') : '');
+  const [ydsLevel, setYdsLevel] = useState(item.category === 'endurance' ? (item.label || '') : '');
+  const [enduranceCount, setEnduranceCount] = useState(item.category === 'endurance' ? (item.target_count != null ? String(item.target_count) : '') : '');
+  const [condUnit, setCondUnit] = useState(item.cond_unit || 'count');
+  const [condBase, setCondBase] = useState(item.category === 'conditioning' ? (item.label || '') : '');
+  const [condValue, setCondValue] = useState(item.category === 'conditioning' ? String(item.cond_unit === 'time' ? (item.target_minutes ?? '') : (item.target_count ?? '')) : '');
+  const [memo, setMemo] = useState(item.category === 'general' ? (item.label || '') : '');
+  const [saving, setSaving] = useState(false);
+  const category = item.category;
+
+  async function save() {
+    setSaving(true);
+    try {
+      const body = {};
+      if (category === 'bouldering') {
+        body.target_color = targetColor || null;
+        body.label = vLevel || null;
+        body.target_count = boulderCount !== '' ? Number(boulderCount) : null;
+      } else if (category === 'endurance') {
+        body.label = ydsLevel || null;
+        body.target_count = enduranceCount !== '' ? Number(enduranceCount) : null;
+      } else if (category === 'conditioning') {
+        body.label = condBase.trim() || null;
+        body.cond_unit = condUnit;
+        if (condUnit === 'count') { body.target_count = condValue !== '' ? Number(condValue) : null; body.target_minutes = null; }
+        else { body.target_minutes = condValue !== '' ? Number(condValue) : null; body.target_count = null; }
+      } else if (category === 'general') {
+        body.label = memo.trim() || null;
+      }
+      await routineApi.update(item.id, body);
+      onSaved();
+    } catch (e) { alert(e.message || '저장 실패'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {category === 'bouldering' && (<>
         <div><div style={lbl}>목표 색상</div>
           <select value={targetColor} onChange={(e) => setTargetColor(e.target.value)} style={inp}>

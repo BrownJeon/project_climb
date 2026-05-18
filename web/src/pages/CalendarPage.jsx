@@ -194,6 +194,13 @@ export default function CalendarPage() {
                     />
                   </div>
                 )}
+                {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                    {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').map((s) => (
+                      <TrainingSessionRow key={s.id} session={s} />
+                    ))}
+                  </div>
+                )}
               </div>
               <RecordActionMenu
                 onEdit={() => setEditLog(log)}
@@ -232,5 +239,56 @@ export default function CalendarPage() {
         />
       )}
     </>
+  );
+}
+
+const CAT_LABEL = { endurance: '지구력', conditioning: '컨디셔닝', general: '기타' };
+
+function TrainingSessionRow({ session }) {
+  const it = session.items?.[0];
+  const cat = session.category;
+  const catLabel = CAT_LABEL[cat] || cat;
+
+  let detail = null;
+  if (cat === 'endurance' && it) {
+    const m = (it.exercise_name || '').match(/\((5\.[\w.]+)\)/);
+    const level = m ? m[1] : it.exercise_name;
+    const cleared = it.sets != null ? it.sets >= 1 : false;
+    const attempts = it.reps_or_seconds;
+    detail = (
+      <>
+        <span style={{ fontWeight: 600 }}>{level}</span>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '1px 6px',
+          borderRadius: 'var(--r-pill)',
+          background: cleared ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.10)',
+          color: cleared ? 'var(--success)' : 'var(--danger)',
+        }}>{cleared ? '완등' : '미완등'}</span>
+        {attempts != null && <span style={{ color: 'var(--ink-3)' }}>{attempts}회 시도</span>}
+      </>
+    );
+  } else if (cat === 'conditioning' && it) {
+    detail = (
+      <>
+        <span style={{ fontWeight: 600 }}>{it.exercise_name}</span>
+        {it.reps_or_seconds != null && (
+          <span style={{ color: 'var(--ink-3)' }}>{it.reps_or_seconds}{it.metric_unit || ''}</span>
+        )}
+      </>
+    );
+  } else if (cat === 'general' && session.memo) {
+    detail = <span style={{ color: 'var(--ink-3)' }}>{session.memo}</span>;
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, flexWrap: 'wrap' }}>
+      <span style={{
+        flexShrink: 0, fontSize: 11, fontWeight: 700,
+        padding: '1px 7px', borderRadius: 'var(--r-pill)',
+        background: 'var(--surface-2)', color: 'var(--ink-2)',
+        border: '1px solid var(--line-2)',
+      }}>{catLabel}</span>
+      {detail}
+    </div>
   );
 }

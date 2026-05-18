@@ -75,10 +75,28 @@ async function listRoutes(req, res, next) {
       distinct: true,
     });
 
+    let likedSet = new Set();
+    let bookmarkedSet = new Set();
+    if (req.user?.id && rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      const [likes, bookmarks] = await Promise.all([
+        Like.findAll({ where: { user_id: req.user.id, ar_route_id: ids }, attributes: ['ar_route_id'] }),
+        Bookmark.findAll({ where: { user_id: req.user.id, ar_route_id: ids }, attributes: ['ar_route_id'] }),
+      ]);
+      likedSet = new Set(likes.map((l) => l.ar_route_id));
+      bookmarkedSet = new Set(bookmarks.map((b) => b.ar_route_id));
+    }
+
+    const routesWithFlags = rows.map((r) => ({
+      ...r.toJSON(),
+      isLiked: likedSet.has(r.id),
+      isBookmarked: bookmarkedSet.has(r.id),
+    }));
+
     return res.json({
       success: true,
       message: null,
-      data: { total: count, page: parseInt(page), routes: rows },
+      data: { total: count, page: parseInt(page), routes: routesWithFlags },
     });
   } catch (err) {
     next(err);

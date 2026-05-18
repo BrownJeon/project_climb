@@ -82,9 +82,11 @@ async function computeBoulderingCurrent(userId, color, { targetGymId, targetBran
 
 async function computeEnduranceCurrent(userId, level) {
   if (!level) return 0;
+  const { Op } = require('sequelize');
   const exerciseName = `지구력 등반 (${level})`;
+  // sets >= 1 = 완등 기록만 카운트
   const count = await TrainingSessionItem.count({
-    where: { exercise_name: exerciseName },
+    where: { exercise_name: exerciseName, sets: { [Op.gte]: 1 } },
     include: [{
       model: TrainingSession, as: 'session', required: true,
       attributes: [], where: { user_id: userId, category: 'endurance' },

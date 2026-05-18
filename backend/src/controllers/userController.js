@@ -1,4 +1,4 @@
-const { User, Follow, ArRoute, Gym, Problem, UserMainGym, ClimbLogProblem, sequelize } = require('../models');
+const { User, Follow, ArRoute, Gym, Problem, UserMainGym, ClimbLogProblem, Like, Bookmark, sequelize } = require('../models');
 
 // helper: route 객체에 climb_attempts에서 cleared/attempts 평탄화
 function attachAttemptSummary(routes) {
@@ -213,10 +213,28 @@ async function getMyRoutes(req, res, next) {
       ],
     });
 
+    const summaryRows = attachAttemptSummary(rows);
+    const ids = rows.map((r) => r.id);
+    let likedSet = new Set();
+    let bookmarkedSet = new Set();
+    if (ids.length > 0) {
+      const [likes, bookmarks] = await Promise.all([
+        Like.findAll({ where: { user_id: req.user.id, ar_route_id: ids }, attributes: ['ar_route_id'] }),
+        Bookmark.findAll({ where: { user_id: req.user.id, ar_route_id: ids }, attributes: ['ar_route_id'] }),
+      ]);
+      likedSet = new Set(likes.map((l) => l.ar_route_id));
+      bookmarkedSet = new Set(bookmarks.map((b) => b.ar_route_id));
+    }
+    const routesWithFlags = summaryRows.map((r) => ({
+      ...r,
+      isLiked: likedSet.has(r.id),
+      isBookmarked: bookmarkedSet.has(r.id),
+    }));
+
     return res.json({
       success: true,
       message: null,
-      data: { total: count, page, routes: attachAttemptSummary(rows) },
+      data: { total: count, page, routes: routesWithFlags },
     });
   } catch (err) {
     next(err);
@@ -250,7 +268,20 @@ async function getMyBookmarks(req, res, next) {
       ],
     });
 
-    return res.json({ success: true, message: null, data: { routes: attachAttemptSummary(routes) } });
+    const summaryRoutes = attachAttemptSummary(routes);
+    const ids = routes.map((r) => r.id);
+    let likedSet = new Set();
+    if (ids.length > 0) {
+      const likes = await Like.findAll({ where: { user_id: req.user.id, ar_route_id: ids }, attributes: ['ar_route_id'] });
+      likedSet = new Set(likes.map((l) => l.ar_route_id));
+    }
+    const routesWithFlags = summaryRoutes.map((r) => ({
+      ...r,
+      isLiked: likedSet.has(r.id),
+      isBookmarked: true,
+    }));
+
+    return res.json({ success: true, message: null, data: { routes: routesWithFlags } });
   } catch (err) {
     next(err);
   }

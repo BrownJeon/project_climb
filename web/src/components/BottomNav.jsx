@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { I } from './atoms/Icons';
 import { useSessionAddModal } from '../contexts/SessionAddModalContext';
+import { passesApi } from '../api/passes';
 
 /**
  * BottomNav
@@ -10,6 +12,20 @@ export default function BottomNav() {
   const nav = useNavigate();
   const loc = useLocation();
   const { open } = useSessionAddModal();
+  const [passAlert, setPassAlert] = useState(false);
+
+  useEffect(() => {
+    passesApi.list().then((r) => {
+      const passes = r.data?.passes || [];
+      const alert = passes.some((p) => {
+        if (p.is_expired) return false;
+        if (p.pass_type === 'period') return p.days_remaining != null && p.days_remaining <= 7;
+        if (p.pass_type === 'count') return p.remaining_count != null && p.remaining_count <= 2;
+        return false;
+      });
+      setPassAlert(alert);
+    }).catch(() => {});
+  }, []);
 
   const onRecords = loc.pathname.startsWith('/records');
   const onCalendar = loc.pathname.startsWith('/calendar');
@@ -42,7 +58,7 @@ export default function BottomNav() {
     }}>
       {/* 마이 */}
       <NavBtn active={loc.pathname.startsWith('/me')} label="마이"
-        icon={I.user(22)} onClick={() => nav('/me')} />
+        icon={I.user(22)} onClick={() => nav('/me')} badge={passAlert} />
 
       {/* 문제 ↔ 캘린더 토글 */}
       <button
@@ -121,14 +137,23 @@ export default function BottomNav() {
   );
 }
 
-function NavBtn({ active, label, icon, onClick }) {
+function NavBtn({ active, label, icon, onClick, badge }) {
   return (
     <button onClick={onClick} style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
       padding: '4px 0',
       color: active ? 'var(--ink-1)' : 'var(--ink-4)',
     }}>
-      <span style={{ opacity: active ? 1 : 0.78 }}>{icon}</span>
+      <span style={{ position: 'relative', opacity: active ? 1 : 0.78 }}>
+        {icon}
+        {badge && (
+          <span style={{
+            position: 'absolute', top: -2, right: -2,
+            width: 7, height: 7, borderRadius: '50%',
+            background: 'var(--warn)',
+          }} />
+        )}
+      </span>
       <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, letterSpacing: -0.2 }}>{label}</span>
     </button>
   );

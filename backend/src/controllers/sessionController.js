@@ -102,6 +102,7 @@ async function createSession(req, res, next) {
       return acc;
     }, {});
     const arRouteIds = [];
+    const problemIds = [];
     const pendingThumbnails = [];
 
     for (let i = 0; i < attempts.length; i++) {
@@ -179,6 +180,7 @@ async function createSession(req, res, next) {
         style: row.style || null,
         ar_route_id: arRouteId,
       }, { transaction: t });
+      problemIds.push(cp.id);
 
       // 다중 영상 link
       const videoIds = Array.isArray(row.ar_route_ids) ? row.ar_route_ids : [];
@@ -258,6 +260,7 @@ async function createSession(req, res, next) {
       message: '운동 기록이 저장되었습니다.',
       data: {
         climb_log_id: log.id,
+        problem_ids: problemIds,
         ar_route_ids: arRouteIds,
         training_session_ids: trainingSessionIds,
         remaining_pass_count: remaining,

@@ -6,6 +6,7 @@ import { STYLE_KEYS, styleMeta } from '../../utils/style';
 import { gymsApi } from '../../api/gyms';
 import { passesApi } from '../../api/passes';
 import { sessionsApi } from '../../api/sessions';
+import { climbLogsApi } from '../../api/climbLogs';
 import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '../TrainingItemFields';
 import TimeRangeField from '../TimeRangeField';
 import VideoLinkPicker from './VideoLinkPicker';
@@ -63,6 +64,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
     color: '', level: '', style: '',
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
+    pendingPhotos: [], // { file: File, preview: string }
     // 지구력
     endurance_level: '',
     // 컨디셔닝
@@ -112,6 +114,19 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
 
     try {
       const res = await sessionsApi.create({ ...payload, files: filesIndexed });
+
+      // 사진 업로드 (best-effort: 실패해도 세션 저장은 유지)
+      const logId = res.data?.climb_log_id;
+      const problemIds = res.data?.problem_ids || [];
+      for (let i = 0; i < boulderingRows.length; i++) {
+        const photos = boulderingRows[i].pendingPhotos || [];
+        const cpId = problemIds[i];
+        if (!logId || !cpId || !photos.length) continue;
+        for (const { file } of photos) {
+          await climbLogsApi.uploadProblemPhoto(logId, cpId, file, {}).catch(() => {});
+        }
+      }
+
       onSaved?.(res.data);
       onClose();
     } catch (e) {
@@ -344,6 +359,48 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
                                 border: '1px dashed var(--line-2)', background: 'var(--surface)',
                                 color: 'var(--primary)',
                               }}>+ 영상 연결</button>
+                          </div>
+                        </div>
+
+                        {/* 사진 첨부 */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>사진 ({(e.pendingPhotos || []).length})</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {(e.pendingPhotos || []).map((p, fi) => (
+                              <div key={fi} style={{ position: 'relative', width: 40, height: 56, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--line)', flexShrink: 0 }}>
+                                <img src={p.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    URL.revokeObjectURL(p.preview);
+                                    updateEntry(e._id, { pendingPhotos: (e.pendingPhotos || []).filter((_, i) => i !== fi) });
+                                  }}
+                                  style={{
+                                    position: 'absolute', top: 1, right: 1,
+                                    width: 14, height: 14, borderRadius: '50%',
+                                    background: 'rgba(0,0,0,.65)', color: '#fff',
+                                    fontSize: 9, lineHeight: '14px', textAlign: 'center',
+                                    border: 'none', cursor: 'pointer', padding: 0,
+                                  }}>×</button>
+                              </div>
+                            ))}
+                            <label style={{
+                              fontSize: 11, fontWeight: 600,
+                              padding: '4px 9px', borderRadius: 'var(--r-pill)',
+                              border: '1px dashed var(--line-2)', background: 'var(--surface)',
+                              color: 'var(--ink-3)', cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}>
+                              <input type="file" accept="image/*" multiple
+                                onChange={(ev) => {
+                                  const files = Array.from(ev.target.files || []);
+                                  if (!files.length) return;
+                                  const newPhotos = files.map((f) => ({ file: f, preview: URL.createObjectURL(f) }));
+                                  updateEntry(e._id, { pendingPhotos: [...(e.pendingPhotos || []), ...newPhotos] });
+                                  ev.target.value = '';
+                                }}
+                                style={{ display: 'none' }} />
+                              + 사진
+                            </label>
                           </div>
                         </div>
                       </>

@@ -26,7 +26,9 @@ const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', margi
 /**
  * 훈련 항목 측정 필드 (목표 등록과 동일 구성)
  * row 모델:
- *  { category, exercise_color, exercise_level, endurance_level, cond_unit, cond_base, value, duration_minutes, memo }
+ *  { category, exercise_color, exercise_level,
+ *    endurance_level, endurance_cleared, endurance_attempts,
+ *    cond_unit, cond_base, value, duration_minutes, memo }
  *
  * onPatch(partial)로 부분 업데이트.
  */
@@ -87,13 +89,31 @@ export default function TrainingItemFields({ row, onPatch }) {
             </select>
           </div>
           <div>
-            <div style={labelStyle}>운동 시간 (시작 ~ 종료)</div>
-            <TimeRangeField compact
-              start={row.start_time} end={row.end_time}
-              onChange={(p) => onPatch({
-                start_time: p.start_time, end_time: p.end_time,
-                duration_minutes: p.duration_minutes != null ? String(p.duration_minutes) : (row.duration_minutes ?? ''),
-              })} />
+            <div style={labelStyle}>완등 여부</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['true', '완등 ✓'], ['false', '미완등']].map(([k, l]) => {
+                const active = String(row.endurance_cleared ?? false) === k;
+                const isCleared = k === 'true';
+                return (
+                  <button key={k} type="button"
+                    onClick={() => onPatch({ endurance_cleared: isCleared })}
+                    style={{
+                      flex: 1, padding: '7px 10px', borderRadius: 'var(--r-sm)',
+                      border: '1px solid ' + (active ? (isCleared ? 'var(--success)' : 'var(--danger)') : 'var(--line-2)'),
+                      background: active ? (isCleared ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.10)') : 'var(--surface)',
+                      color: active ? (isCleared ? 'var(--success)' : 'var(--danger)') : 'var(--ink-2)',
+                      fontWeight: active ? 700 : 500, fontSize: 12,
+                    }}>{l}</button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={labelStyle}>시도 횟수 (회)</div>
+            <input type="number" min="0" step="1" inputMode="numeric"
+              value={row.endurance_attempts ?? ''}
+              onChange={(e) => onPatch({ endurance_attempts: e.target.value.replace(/[^\d]/g, '') })}
+              style={inputStyle} />
           </div>
         </>
       )}
@@ -186,8 +206,9 @@ export function rowToTrainingPayload(row) {
   } else if (cat === 'endurance' && row.endurance_level) {
     items.push({
       exercise_name: `지구력 등반 (${row.endurance_level})`,
-      reps_or_seconds: row.duration_minutes ? Number(row.duration_minutes) : null,
-      metric_unit: row.duration_minutes ? '분' : null,
+      sets: row.endurance_cleared ? 1 : 0,
+      reps_or_seconds: row.endurance_attempts ? Number(row.endurance_attempts) : null,
+      metric_unit: '회',
       notes: null,
     });
   } else if (cat === 'conditioning' && row.cond_base) {
@@ -200,9 +221,9 @@ export function rowToTrainingPayload(row) {
   }
   return {
     category: cat,
-    duration_minutes: row.duration_minutes ? Number(row.duration_minutes) : null,
-    start_time: row.start_time || null,
-    end_time: row.end_time || null,
+    duration_minutes: cat === 'endurance' ? null : (row.duration_minutes ? Number(row.duration_minutes) : null),
+    start_time: cat === 'endurance' ? null : (row.start_time || null),
+    end_time: cat === 'endurance' ? null : (row.end_time || null),
     memo: row.memo || null,
     items,
   };

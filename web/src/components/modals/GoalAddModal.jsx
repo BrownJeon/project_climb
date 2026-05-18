@@ -194,7 +194,7 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
               fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.5,
             }}>
               {category === 'bouldering' && '같은 색상·V등급의 완등 횟수가 운동 기록에서 자동으로 합산됩니다.'}
-              {category === 'endurance' && '같은 난이도의 지구력 항목 등록 횟수가 운동 기록에서 자동으로 합산됩니다.'}
+              {category === 'endurance' && '같은 난이도의 지구력 완등 횟수(sets=1)가 운동 기록에서 자동으로 합산됩니다.'}
               {category === 'conditioning' && '같은 종목·단위의 운동 기록 최댓값이 자동으로 갱신됩니다.'}
             </div>
           )}
@@ -287,20 +287,38 @@ export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
           )}
 
           {category === 'endurance' && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Field label="현재 난이도 (5.x)">
-                <select value={currentMetricLabel} onChange={(e) => setCurrentMetricLabel(e.target.value)} style={inputStyle}>
-                  <option value="">선택</option>
-                  {YDS_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </Field>
-              <Field label="목표 난이도 (5.x)">
-                <select value={metricLabel} onChange={(e) => setMetricLabel(e.target.value)} style={inputStyle}>
-                  <option value="">선택</option>
-                  {YDS_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </Field>
-            </div>
+            <>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Field label="현재 난이도 (선택)">
+                  <select value={currentMetricLabel} onChange={(e) => setCurrentMetricLabel(e.target.value)} style={inputStyle}>
+                    <option value="">선택</option>
+                    {YDS_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field label="목표 난이도 (5.x)" required>
+                  <select value={metricLabel} onChange={(e) => setMetricLabel(e.target.value)} style={inputStyle}>
+                    <option value="">선택</option>
+                    {YDS_LEVELS.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Field label="현재 완등 횟수">
+                  <input type="number" min="0" step="1" inputMode="numeric" pattern="[0-9]*"
+                    value={currentValue}
+                    onChange={(e) => setCurrentValue(e.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="자동 집계"
+                    style={{ ...inputStyle, color: 'var(--ink-3)' }} />
+                </Field>
+                <Field label="목표 완등 횟수">
+                  <input type="number" min="1" step="1" inputMode="numeric" pattern="[0-9]*"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="예: 5"
+                    style={inputStyle} />
+                </Field>
+              </div>
+            </>
           )}
 
           {category === 'conditioning' && (
