@@ -11,6 +11,7 @@ import VideoUploadModal from '../components/modals/VideoUploadModal';
 import { usersApi } from '../api/users';
 import { passesApi } from '../api/passes';
 import { formatTenure, formatDateKR } from '../utils/climbingTenure';
+import { VIDEO_QUALITY_PRESETS, getVideoQualityKey, setVideoQualityKey } from '../utils/videoQuality';
 
 const PAGE_LIMIT = 12;
 
@@ -29,6 +30,7 @@ export default function MyPage() {
   const [passAddOpen, setPassAddOpen] = useState(false);
   const [passEditTarget, setPassEditTarget] = useState(null);
   const [videoUploadOpen, setVideoUploadOpen] = useState(false);
+  const [videoQuality, setVideoQualityState] = useState(getVideoQualityKey);
 
   function loadUser() {
     usersApi.me().then((r) => setUser(r.data)).catch(() => {});
@@ -268,6 +270,35 @@ export default function MyPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* 설정 섹션 */}
+      <div style={{ padding: '14px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>설정</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>영상 업로드 화질</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+              {VIDEO_QUALITY_PRESETS.find((p) => p.key === videoQuality)?.desc || ''}
+            </div>
+          </div>
+          <select
+            value={videoQuality}
+            onChange={(e) => {
+              setVideoQualityKey(e.target.value);
+              setVideoQualityState(e.target.value);
+            }}
+            style={{
+              padding: '7px 10px', fontSize: 13, borderRadius: 'var(--r-sm)',
+              border: '1px solid var(--line)', background: 'var(--surface-2)',
+              color: 'var(--ink-1)',
+            }}
+          >
+            {VIDEO_QUALITY_PRESETS.map((p) => (
+              <option key={p.key} value={p.key}>{p.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Tabs (영상/북마크) */}

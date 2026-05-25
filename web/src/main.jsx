@@ -6,6 +6,8 @@ import './styles/app.css';
 
 import Layout from './components/Layout';
 import { SessionAddModalProvider } from './contexts/SessionAddModalContext';
+import { VideoUploadProvider } from './contexts/VideoUploadContext';
+import VideoUploadToast from './components/VideoUploadToast';
 
 import FeedPage from './pages/FeedPage';
 import RouteDetailPage from './pages/RouteDetailPage';
@@ -24,7 +26,9 @@ import NotFoundPage from './pages/NotFoundPage';
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
+      <VideoUploadProvider>
       <SessionAddModalProvider>
+        <VideoUploadToast />
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<FeedPage />} />
@@ -44,6 +48,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           </Route>
         </Routes>
       </SessionAddModalProvider>
+      </VideoUploadProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

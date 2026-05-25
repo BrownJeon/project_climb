@@ -453,6 +453,27 @@ const ANALYSIS_META_V1 = `당신은 클라이밍 코치를 위한 프롬프트 �
 - 다른 부연 설명·머리말·꼬리말은 출력하지 마세요.
 `;
 
+async function migrateClimbLogProblemVideos() {
+  await addColumnIfMissing('climb_log_problems', 'video_url', 'video_url VARCHAR(500) NULL');
+  await addColumnIfMissing('climb_log_problems', 'thumbnail_url', 'thumbnail_url VARCHAR(500) NULL');
+  await addColumnIfMissing(
+    'climb_log_problems', 'video_status',
+    "video_status ENUM('none','processing','ready','error') NOT NULL DEFAULT 'none'"
+  );
+  // 기존 ar_route 연결된 문제들에 video_url 복사
+  await sequelize.query(`
+    UPDATE climb_log_problems clp
+    JOIN ar_routes ar ON ar.id = clp.ar_route_id
+    SET clp.video_url = ar.video_url, clp.thumbnail_url = ar.thumbnail_url
+    WHERE clp.ar_route_id IS NOT NULL AND clp.video_url IS NULL
+  `);
+  // 이미 video_url이 있는 행은 ready로 초기화
+  await sequelize.query(`
+    UPDATE climb_log_problems SET video_status = 'ready'
+    WHERE video_url IS NOT NULL AND video_status = 'none'
+  `);
+}
+
 async function seedPromptTemplate() {
   await sequelize.query(
     `INSERT IGNORE INTO training_prompt_templates
@@ -485,6 +506,7 @@ async function setupDB() {
   await migrateGymBrand();
   await migrateMaxLevel();
   await migrateMainGym();
+  await migrateClimbLogProblemVideos();
   await seedPromptTemplate();
 
   console.log('[setupDB] 완료');

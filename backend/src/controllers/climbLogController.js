@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, sequelize } = require('../models');
-const { attachThumbnailAsync } = require('../services/thumbnail');
+const { attachThumbnailAsync, attachThumbnailToClimbProblem } = require('../services/thumbnail');
+const { processVideoBackground } = require('../services/videoProcessor');
 const { recomputeUserGoals } = require('../services/goalProgress');
 const { computeDurationMinutes, normalizeTime } = require('../utils/timeRange');
 
@@ -139,6 +140,8 @@ async function getLogsByDate(req, res, next) {
           sort_order: v.sort_order,
           ar_route: v.ar_route ? v.ar_route.toJSON() : null,
         })),
+        video_url: p.video_url || p.ar_route?.video_url || null,
+        thumbnail_url: p.thumbnail_url || p.ar_route?.thumbnail_url || null,
         photos: (p.photos || []).map((ph) => ({
           id: ph.id, photo_url: ph.photo_url,
           hold_annotations: ph.hold_annotations,
@@ -237,6 +240,8 @@ async function getLogById(req, res, next) {
           sort_order: v.sort_order,
           ar_route: v.ar_route ? v.ar_route.toJSON() : null,
         })),
+        video_url: p.video_url || p.ar_route?.video_url || null,
+        thumbnail_url: p.thumbnail_url || p.ar_route?.thumbnail_url || null,
         photos: (p.photos || []).map((ph) => ({
           id: ph.id, photo_url: ph.photo_url,
           hold_annotations: ph.hold_annotations,
@@ -590,25 +595,21 @@ async function uploadProblemVideo(req, res, next) {
       const p = await Problem.findByPk(cp.problem_id, { attributes: ['color', 'level'] });
       if (p) { color = p.color; level = p.level; }
     }
-    const video_url = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
-    const ar = await ArRoute.create({
-      user_id: userId,
-      problem_id: cp.problem_id || null,
-      title: fmtRouteTitle({ color, level }),
-      description: null,
-      video_url,
-      tags: null,
-    });
-    await cp.update({ ar_route_id: ar.id });
+    const qualityKey = req.body?.quality || 'standard';
+    const tempVideoUrl = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
+    await cp.update({ video_url: tempVideoUrl, thumbnail_url: null, video_status: 'processing' });
 
-    attachThumbnailAsync({
-      ArRoute, arRouteId: ar.id, videoFilePath: req.file.path, videoFilename: req.file.filename,
+    processVideoBackground({
+      ClimbLogProblem,
+      cpId: cp.id,
+      inputPath: req.file.path,
+      qualityKey,
     });
 
     return res.json({
       success: true,
-      data: { ar_route: { id: ar.id, title: ar.title, video_url: ar.video_url, thumbnail_url: null } },
-      message: '영상이 업로드되었습니다.',
+      data: { video_url: tempVideoUrl, thumbnail_url: null, video_status: 'processing' },
+      message: '영상이 업로드되었습니다. 서버에서 처리 중입니다.',
     });
   } catch (err) { next(err); }
 }
@@ -629,8 +630,32 @@ async function removeProblemVideo(req, res, next) {
     if (!parent || Number(parent.user_id) !== Number(userId)) {
       return res.status(403).json({ success: false, data: null, message: '권한 없음' });
     }
-    await cp.update({ ar_route_id: null });
+    await cp.update({ ar_route_id: null, video_url: null, thumbnail_url: null, video_status: 'none' });
     return res.json({ success: true, data: null, message: '영상 연결이 해제되었습니다.' });
+  } catch (err) { next(err); }
+}
+
+/**
+ * GET /api/climb-logs/:logId/problems/:cpId/video-status
+ * 영상 처리 상태 폴링용
+ */
+async function getProblemVideoStatus(req, res, next) {
+  try {
+    const { logId, cpId } = req.params;
+    const cp = await ClimbLogProblem.findByPk(cpId, {
+      attributes: ['id', 'log_id', 'video_url', 'thumbnail_url', 'video_status'],
+    });
+    if (!cp || Number(cp.log_id) !== Number(logId)) {
+      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
+    }
+    return res.json({
+      success: true,
+      data: {
+        video_status: cp.video_status || 'none',
+        video_url: cp.video_url || null,
+        thumbnail_url: cp.thumbnail_url || null,
+      },
+    });
   } catch (err) { next(err); }
 }
 
@@ -948,11 +973,125 @@ async function deleteProblemPhoto(req, res, next) {
   } catch (err) { next(err); }
 }
 
+/**
+ * GET /api/climb-logs?gym_id=:id&view=all|week|month&offset=0&page=1&limit=10
+ * 특정 암장의 운동기록 목록 (기간 필터 + 페이징)
+ */
+async function getLogsByGym(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const gymId = parseInt(req.query.gym_id, 10);
+    const view = req.query.view || 'all';
+    const offsetInt = parseInt(req.query.offset || '0', 10);
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || '10', 10)));
+
+    let from = null, to = null, period = null;
+    if (req.query.from && req.query.to) {
+      // 직접 지정 기간
+      from = req.query.from;
+      to = req.query.to;
+      period = { from, to, view: 'custom', offset: 0 };
+    } else if (view !== 'all') {
+      const now = new Date();
+      if (view === 'week') {
+        const dow = now.getDay();
+        const monOff = dow === 0 ? -6 : 1 - dow;
+        const mon = new Date(now);
+        mon.setDate(now.getDate() + monOff + offsetInt * 7);
+        mon.setHours(0, 0, 0, 0);
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        const iso = (d) => d.toISOString().slice(0, 10);
+        from = iso(mon); to = iso(sun);
+      } else if (view === 'month') {
+        const base = new Date(now.getFullYear(), now.getMonth() + offsetInt, 1);
+        const last = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+        const iso = (d) => d.toISOString().slice(0, 10);
+        from = iso(base); to = iso(last);
+      }
+      period = { from, to, view, offset: offsetInt };
+    }
+
+    const where = { user_id: userId };
+    if (gymId) where.gym_id = gymId;
+    if (from && to) where.visited_at = { [Op.between]: [from, to] };
+
+    const total = await ClimbLog.count({ where });
+    const logs = await ClimbLog.findAll({
+      where,
+      include: [
+        {
+          model: GymPass, as: 'gym_pass',
+          attributes: ['id', 'pass_type', 'label', 'remaining_count'],
+          required: false,
+        },
+        {
+          model: ClimbLogProblem, as: 'problems',
+          include: [
+            { model: Problem, as: 'problem', attributes: ['id', 'level', 'color'], required: false },
+          ],
+        },
+      ],
+      order: [['visited_at', 'DESC'], ['created_at', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    const logDates = [...new Set(logs.map((l) => l.visited_at))];
+    const trainingByDate = new Map();
+    if (logDates.length > 0) {
+      const allTraining = await TrainingSession.findAll({
+        where: { user_id: userId, ...(gymId ? { gym_id: gymId } : {}), session_date: { [Op.in]: logDates } },
+        include: [{ model: TrainingSessionItem, as: 'items' }],
+        order: [['id', 'ASC']],
+      });
+      allTraining.forEach((s) => {
+        const k = s.session_date;
+        if (!trainingByDate.has(k)) trainingByDate.set(k, []);
+        trainingByDate.get(k).push(s);
+      });
+    }
+
+    const formatted = logs.map((log) => ({
+      id: log.id,
+      visited_at: log.visited_at,
+      memo: log.memo,
+      duration_minutes: log.duration_minutes,
+      start_time: normalizeTime(log.start_time),
+      end_time: normalizeTime(log.end_time),
+      gym_pass_id: log.gym_pass_id,
+      gym_pass: log.gym_pass ? log.gym_pass.toJSON() : null,
+      used_day_pass: !!log.used_day_pass,
+      problems: (log.problems || []).map((p) => ({
+        id: p.id,
+        level: p.problem?.level || p.custom_level || '',
+        color: p.problem?.color || p.custom_color || '',
+        is_cleared: p.is_cleared,
+        cleared_count: p.cleared_count,
+        failed_count: p.failed_count,
+        style: p.style,
+      })),
+      training_sessions: (trainingByDate.get(log.visited_at) || []).map((s) => ({
+        id: s.id, category: s.category,
+        duration_minutes: s.duration_minutes,
+        memo: s.memo,
+        items: (s.items || []).map((it) => ({
+          id: it.id, exercise_name: it.exercise_name,
+          sets: it.sets, reps_or_seconds: it.reps_or_seconds,
+          metric_unit: it.metric_unit,
+        })),
+      })),
+    }));
+
+    res.json({ success: true, data: { logs: formatted, total, period }, message: null });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
-  getLogDates, getLogsByDate, getLogById, createLog, updateLog, deleteLog,
+  getLogDates, getLogsByDate, getLogsByGym, getLogById, createLog, updateLog, deleteLog,
   updateLogProblem, deleteLogProblem,
   addLogProblem,
-  uploadProblemVideo, removeProblemVideo,
+  uploadProblemVideo, removeProblemVideo, getProblemVideoStatus,
   uploadProblemPhoto, updateProblemPhoto, deleteProblemPhoto,
   listLogProblems,
   getSummary,

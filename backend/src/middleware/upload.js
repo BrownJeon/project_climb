@@ -3,7 +3,7 @@ const path = require('path');
 
 const ALLOWED_VIDEO = ['.mp4', '.mov', '.avi', '.webm'];
 const ALLOWED_IMAGE = ['.jpg', '.jpeg', '.png', '.webp'];
-const MAX_VIDEO_SIZE = 200 * 1024 * 1024; // 200MB
+const MAX_VIDEO_SIZE = 800 * 1024 * 1024; // 800MB (원본 UHD 허용)
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;  // 10MB
 
 function fileFilter(allowed) {

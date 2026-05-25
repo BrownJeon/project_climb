@@ -73,6 +73,19 @@ const ArRoute = sequelize.define('ArRoute', {
     type: DataTypes.INTEGER.UNSIGNED,
     defaultValue: 0,
   },
+  ai_analysis: {
+    type: DataTypes.TEXT('medium'),
+    allowNull: true,
+    comment: 'JSON: { result_markdown, analyzed_at, duration_ms, engine } — 영상 등록 시 자동 생성',
+    get() {
+      const v = this.getDataValue('ai_analysis');
+      if (!v) return null;
+      if (typeof v === 'string') {
+        try { return JSON.parse(v); } catch { return null; }
+      }
+      return v;
+    },
+  },
 }, {
   tableName: 'ar_routes',
   timestamps: true,

@@ -3,8 +3,11 @@ import { client } from './client';
 export const climbLogsApi = {
   monthDates: (year, month) => client.get('/climb-logs', { params: { year, month } }),
   visitedGyms: () => client.get('/climb-logs/visited-gyms'),
+  visitedGymsWithDetail: (limit = 20) => client.get('/climb-logs/visited-gyms', { params: { include_gym: 'true', limit } }),
   summary: (from, to) => client.get('/climb-logs/summary', { params: { from, to } }),
   byDate: (date) => client.get('/climb-logs', { params: { date } }),
+  byGym: (gymId, params = {}) => client.get('/climb-logs', { params: { gym_id: gymId, ...params } }),
+  byRange: (from, to, params = {}) => client.get('/climb-logs', { params: { from, to, ...params } }),
   byId: (id) => client.get(`/climb-logs/${id}`),
   listProblems: (params) => client.get('/climb-logs/problems', { params }),
   create: (body) => client.post('/climb-logs', body),
@@ -13,13 +16,17 @@ export const climbLogsApi = {
   addProblem: (logId, body) => client.post(`/climb-logs/${logId}/problems`, body),
   updateProblem: (logId, cpId, body) => client.patch(`/climb-logs/${logId}/problems/${cpId}`, body),
   removeProblem: (logId, cpId) => client.delete(`/climb-logs/${logId}/problems/${cpId}`),
-  uploadProblemVideo: (logId, cpId, file) => {
+  uploadProblemVideo: (logId, cpId, file, { quality = 'standard', onUploadProgress } = {}) => {
     const fd = new FormData();
     fd.append('video', file);
+    fd.append('quality', quality);
     return client.post(`/climb-logs/${logId}/problems/${cpId}/video`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress,
     });
   },
+  getProblemVideoStatus: (logId, cpId) =>
+    client.get(`/climb-logs/${logId}/problems/${cpId}/video-status`),
   removeProblemVideo: (logId, cpId) => client.delete(`/climb-logs/${logId}/problems/${cpId}/video`),
   uploadProblemPhoto: (logId, cpId, file, extra = {}) => {
     const fd = new FormData();

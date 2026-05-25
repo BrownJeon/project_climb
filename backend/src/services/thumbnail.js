@@ -92,4 +92,18 @@ function attachThumbnailAsync({ ArRoute, arRouteId, videoFilePath, videoFilename
   });
 }
 
-module.exports = { extractThumbnail, attachThumbnailAsync, thumbnailPathFor, thumbnailUrlFor };
+function attachThumbnailToClimbProblem({ ClimbLogProblem, cpId, videoFilePath, videoFilename }) {
+  setImmediate(async () => {
+    try {
+      const out = await extractThumbnail(videoFilePath);
+      if (!out) return;
+      const url = thumbnailUrlFor(videoFilename);
+      await ClimbLogProblem.update({ thumbnail_url: url }, { where: { id: cpId } });
+      console.log(`[thumbnail] climb_log_problem(${cpId}) 썸네일 저장: ${url}`);
+    } catch (e) {
+      console.warn(`[thumbnail] attach 실패: ${e.message}`);
+    }
+  });
+}
+
+module.exports = { extractThumbnail, attachThumbnailAsync, attachThumbnailToClimbProblem, thumbnailPathFor, thumbnailUrlFor };

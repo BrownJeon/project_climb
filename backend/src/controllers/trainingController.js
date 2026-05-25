@@ -119,11 +119,50 @@ async function deleteGoal(req, res, next) {
 }
 
 // ─────────────────── 세션 (자동 합성 포함) ───────────────────
+
+function computeViewRange(view, offsetInt) {
+  const now = new Date();
+  if (view === 'week') {
+    const dow = now.getDay(); // 0=일, 1=월, ...
+    const diffToMon = (dow === 0 ? -6 : 1 - dow);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMon + offsetInt * 7);
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return {
+      from: monday.toISOString().slice(0, 10),
+      to: sunday.toISOString().slice(0, 10),
+    };
+  }
+  if (view === 'month') {
+    const base = new Date(now.getFullYear(), now.getMonth() + offsetInt, 1);
+    const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+    return {
+      from: base.toISOString().slice(0, 10),
+      to: lastDay.toISOString().slice(0, 10),
+    };
+  }
+  return null;
+}
+
 async function listSessions(req, res, next) {
   try {
     const userId = req.user.id;
-    const from = req.query.from || new Date(Date.now() - 28 * 86400000).toISOString().slice(0, 10);
-    const to = req.query.to || new Date().toISOString().slice(0, 10);
+    const view = req.query.view; // 'week' | 'month' | undefined
+    const offsetInt = parseInt(req.query.offset || '0', 10) || 0;
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '30', 10)));
+
+    let from, to;
+    const viewRange = view ? computeViewRange(view, offsetInt) : null;
+    if (viewRange) {
+      from = viewRange.from;
+      to = viewRange.to;
+    } else {
+      from = req.query.from || new Date(Date.now() - 28 * 86400000).toISOString().slice(0, 10);
+      to = req.query.to || new Date().toISOString().slice(0, 10);
+    }
     const categoryFilter = req.query.category;
 
     const direct = await TrainingSession.findAll({
@@ -222,7 +261,22 @@ async function listSessions(req, res, next) {
       summary.total.minutes += s.duration_minutes || 0;
     }
 
-    return res.json({ success: true, data: { sessions: all, summary }, message: null });
+    // 페이징 (week/month view는 전체 반환, view=undefined는 page/limit 적용)
+    const total = all.length;
+    const sessions = view ? all : all.slice((page - 1) * limit, page * limit);
+
+    return res.json({
+      success: true,
+      data: {
+        sessions,
+        summary,
+        period: { from, to, view: view || 'all', offset: offsetInt },
+        total,
+        page: view ? 1 : page,
+        limit: view ? total : limit,
+      },
+      message: null,
+    });
   } catch (e) { next(e); }
 }
 
@@ -355,13 +409,42 @@ async function analyze(req, res, next) {
   }
 
   // 일일 호출 한도
-  const limit = parseInt(process.env.TRAINING_ANALYZE_DAILY_LIMIT || '50', 10);
+  const dailyLimit = parseInt(process.env.TRAINING_ANALYZE_DAILY_LIMIT || '50', 10);
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const todayCount = await TrainingAnalysis.count({
     where: { user_id: req.user.id, created_at: { [Op.gte]: startOfDay } },
   });
-  if (todayCount >= limit) {
+  if (todayCount >= dailyLimit) {
     return res.status(429).json({ success: false, message: '오늘 분석 호출 한도를 초과했습니다.', data: null });
+  }
+
+  // 기간 포함 관계 검사: 기존 분석과 중복 방지
+  const existingAnalyses = await TrainingAnalysis.findAll({
+    where: { user_id: req.user.id },
+    attributes: ['id', 'period_from', 'period_to'],
+    order: [['created_at', 'DESC']],
+  });
+  for (const e of existingAnalyses) {
+    const eFrom = e.period_from; // DATEONLY → string 'YYYY-MM-DD'
+    const eTo = e.period_to;
+    // Case A: 기존 기간이 신규 기간을 포함 → 기존 결과 반환
+    if (eFrom <= from && eTo >= to) {
+      const full = await TrainingAnalysis.findByPk(e.id);
+      if (wantStream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+        res.write(`event: meta-ready\ndata: ${JSON.stringify({ stage1_ms: 0, template: full.template_key ? { key: full.template_key, version: full.template_version } : null, cached: true })}\n\n`);
+        res.write(`event: done\ndata: ${JSON.stringify({ id: full.id, stage2_ms: 0, cached: true })}\n\n`);
+        return res.end();
+      }
+      return res.json({ success: true, data: formatAnalysisRow(full), message: null });
+    }
+    // Case B: 신규 기간이 기존 기간�� 포함 → 기존 삭제 후 신규 실행
+    if (from <= eFrom && to >= eTo) {
+      await e.destroy();
+    }
   }
 
   try {

@@ -56,6 +56,13 @@ async function computeBoulderingCurrent(userId, color, { targetGymId, targetBran
     attributes: ['cleared_count', 'is_cleared', 'problem_id', 'custom_color', 'custom_level'],
     where: {
       [Op.and]: [
+        // 완등 기록만 집계 (실패 제외)
+        {
+          [Op.or]: [
+            { is_cleared: true },
+            { cleared_count: { [Op.gt]: 0 } },
+          ],
+        },
         // 색상 매칭: custom_color 우선, problem.color도 허용
         {
           [Op.or]: [
@@ -145,9 +152,13 @@ async function recomputeUserGoals(userId) {
     if (current === null) continue;
     const target = Number(g.target_value);
     const pct = computePct(target, current, `${g.metric_label || ''} ${g.current_metric_label || ''}`);
-    if (Number(g.current_value) !== current || g.progress_percent !== pct) {
+    const updates = {};
+    if (Number(g.current_value) !== current) updates.current_value = current;
+    if (g.progress_percent !== pct) updates.progress_percent = pct;
+    if (pct >= 100 && g.status === 'in_progress') updates.status = 'done';
+    if (Object.keys(updates).length > 0) {
       try {
-        await g.update({ current_value: current, progress_percent: pct });
+        await g.update(updates);
       } catch (err) {
         console.warn('[goalProgress] update fail goal=', g.id, err.message);
       }

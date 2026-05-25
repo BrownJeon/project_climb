@@ -1,6 +1,7 @@
 const { sequelize } = require('../config/database');
 const { ArRoute, User, Problem, Gym, Like, Bookmark, Comment } = require('../models');
 const { attachThumbnailAsync } = require('../services/thumbnail');
+const { analyzeRouteAsync } = require('../services/routeAnalyzer');
 
 const ROUTE_INCLUDE = [
   { model: User, as: 'author', attributes: ['id', 'nickname', 'profile_image'] },
@@ -173,6 +174,9 @@ async function createRoute(req, res, next) {
       videoFilename: req.file.filename,
     });
 
+    // 영상 등록 시 AI 기술 분석 백그라운드 자동 실행 (응답 지연 없음)
+    setImmediate(() => analyzeRouteAsync(route.id, req.user.id));
+
     return res.status(201).json({ success: true, message: 'AR 공략이 등록되었습니다.', data: route });
   } catch (err) {
     next(err);
@@ -236,6 +240,8 @@ async function updateRoute(req, res, next) {
         videoFilePath: req.file.path,
         videoFilename: req.file.filename,
       });
+      // 영상 교체 시 AI 분석 재실행
+      setImmediate(() => analyzeRouteAsync(route.id, req.user.id));
     }
 
     const refreshed = await ArRoute.findByPk(route.id, { include: ROUTE_INCLUDE });

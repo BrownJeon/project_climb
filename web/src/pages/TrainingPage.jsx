@@ -83,20 +83,20 @@ function GoalsTab({ reloadTick = 0 }) {
   const refresh = () => trainingApi.goals().then((r) => setGoals(r.data?.goals || [])).catch(() => {});
   useEffect(() => { refresh(); }, [reloadTick]);
 
-  return (
-    <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 600 }}>
-        진행 중 ({goals.filter((g) => g.status === 'in_progress').length})
-      </div>
-      {goals.filter((g) => g.status === 'in_progress').map((g) => (
-        <div key={g.id}
-          onClick={() => setEditGoal(g)}
-          role="button" tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setEditGoal(g); }}
-          style={{
-            background: 'var(--surface)', border: '1px solid var(--line)',
-            borderRadius: 'var(--r-md)', padding: '14px', cursor: 'pointer',
-          }}>
+  const inProgressGoals = goals.filter((g) => g.status === 'in_progress');
+  const doneGoals = goals.filter((g) => g.status === 'done');
+
+  function GoalCard({ g, dimmed = false }) {
+    return (
+      <div key={g.id}
+        onClick={() => setEditGoal(g)}
+        role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setEditGoal(g); }}
+        style={{
+          background: 'var(--surface)', border: '1px solid var(--line)',
+          borderRadius: 'var(--r-md)', padding: '14px', cursor: 'pointer',
+          opacity: dimmed ? 0.7 : 1,
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>{GOAL_CATEGORY_ICON[g.category] || '🚩'} {g.title}</span>
             <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>· {CATEGORY_KO[g.category] || g.category}</span>
@@ -153,14 +153,31 @@ function GoalsTab({ reloadTick = 0 }) {
             </div>
           )}
           <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-2)', overflow: 'hidden', marginBottom: 6 }}>
-            <div style={{ height: '100%', width: `${g.progress_percent || 0}%`, background: 'var(--primary)', transition: 'width .3s' }} />
+            <div style={{ height: '100%', width: `${g.progress_percent || 0}%`, background: dimmed ? 'var(--success, #22c55e)' : 'var(--primary)', transition: 'width .3s' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
             <span style={{ color: 'var(--ink-3)' }}>{g.category !== 'general' ? (g.description || '') : ''}</span>
-            <span className="tabnum" style={{ color: 'var(--ink-1)', fontWeight: 700 }}>{g.progress_percent || 0}%</span>
+            <span className="tabnum" style={{ color: dimmed ? 'var(--success, #22c55e)' : 'var(--ink-1)', fontWeight: 700 }}>{g.progress_percent || 0}%</span>
           </div>
         </div>
-      ))}
+    );
+  }
+
+  return (
+    <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 600 }}>
+        진행 중 ({inProgressGoals.length})
+      </div>
+      {inProgressGoals.map((g) => <GoalCard key={g.id} g={g} />)}
+
+      {doneGoals.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 600, marginTop: 4 }}>
+            달성 완료 ({doneGoals.length})
+          </div>
+          {doneGoals.map((g) => <GoalCard key={g.id} g={g} dimmed />)}
+        </>
+      )}
 
       {editGoal && (
         <GoalAddModal
@@ -175,17 +192,31 @@ function GoalsTab({ reloadTick = 0 }) {
 }
 
 function RecordsTab() {
-  const [data, setData] = useState({ sessions: [], summary: null });
+  const [data, setData] = useState({ sessions: [], summary: null, period: null, total: 0 });
   const [reloadTick, setReloadTick] = useState(0);
   const [editTarget, setEditTarget] = useState(null);
+  const [view, setView] = useState('week');       // 'week' | 'month' | 'all'
+  const [viewOffset, setViewOffset] = useState(0); // 0=현재, -1=이전
+  const [page, setPage] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
-    trainingApi.sessions().then((r) => setData({
+    const params = view !== 'all'
+      ? { view, offset: viewOffset }
+      : { page, limit: 30 };
+    trainingApi.sessions(params).then((r) => setData({
       sessions: r.data?.sessions || [],
       summary: r.data?.summary || null,
+      period: r.data?.period || null,
+      total: r.data?.total || 0,
     })).catch(() => {});
-  }, [reloadTick]);
+  }, [reloadTick, view, viewOffset, page]);
+
+  function handleViewChange(v) {
+    setView(v);
+    setViewOffset(0);
+    setPage(1);
+  }
 
   async function handleDelete(s) {
     const isSynth = !!s.synthetic_from_climb_log_id;
@@ -217,14 +248,41 @@ function RecordsTab() {
     setReloadTick((tk) => tk + 1);
   }
 
+  const totalPages = Math.ceil(data.total / 30);
+
   return (
     <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* 뷰 토글 */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[['all', '전체'], ['week', '주간'], ['month', '월간']].map(([v, l]) => (
+          <Chip key={v} active={view === v} onClick={() => handleViewChange(v)}>{l}</Chip>
+        ))}
+      </div>
+
+      {/* 주간/월간 네비게이션 */}
+      {view !== 'all' && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <button
+            onClick={() => setViewOffset((o) => o - 1)}
+            style={{ fontSize: 13, color: 'var(--ink-2)', padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)', cursor: 'pointer' }}
+          >{'‹'} 이전</button>
+          <span style={{ fontSize: 12, color: 'var(--ink-2)', fontWeight: 600 }}>
+            {data.period ? `${data.period.from} ~ ${data.period.to}` : ''}
+          </span>
+          <button
+            onClick={() => setViewOffset((o) => Math.min(o + 1, 0))}
+            disabled={viewOffset >= 0}
+            style={{ fontSize: 13, color: viewOffset >= 0 ? 'var(--ink-4)' : 'var(--ink-2)', padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)', cursor: viewOffset >= 0 ? 'default' : 'pointer' }}
+          >다음 {'›'}</button>
+        </div>
+      )}
+
       {data.summary && (
         <div style={{
           background: 'var(--surface)', border: '1px solid var(--line)',
           borderRadius: 'var(--r-md)', padding: '14px',
         }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>이번 주 요약</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>{view === 'week' ? '주간' : view === 'month' ? '월간' : '기간'} 요약</div>
           {Object.entries(data.summary.by_category || {}).map(([cat, v]) => (
             <div key={cat} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', fontSize: 13 }}>
               <span style={{ color: 'var(--ink-2)' }}>{CATEGORY_KO[cat] || cat}</span>
@@ -302,6 +360,39 @@ function RecordsTab() {
         </div>
         );
       })}
+
+      {/* 전체 뷰 페이징 */}
+      {view === 'all' && totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, paddingTop: 4, flexWrap: 'wrap' }}>
+          {(() => {
+            const btnStyle = (active) => ({
+              minWidth: 32, height: 32, borderRadius: 'var(--r-sm)',
+              fontSize: 13, fontWeight: active ? 700 : 400,
+              background: active ? 'var(--primary)' : 'var(--surface-2)',
+              color: active ? '#fff' : 'var(--ink-2)',
+              border: active ? 'none' : '1px solid var(--line)',
+              cursor: active ? 'default' : 'pointer',
+            });
+            const cur = page;
+            const pages = [];
+            if (totalPages <= 5) {
+              for (let i = 1; i <= totalPages; i++) pages.push(i);
+            } else {
+              const set = new Set([1, totalPages, cur, cur - 1, cur + 1]
+                .filter((n) => n >= 1 && n <= totalPages));
+              [...set].sort((a, b) => a - b).forEach((n, i, arr) => {
+                if (i > 0 && n - arr[i - 1] > 1) pages.push('…');
+                pages.push(n);
+              });
+            }
+            return pages.map((p, i) =>
+              p === '…'
+                ? <span key={`e${i}`} style={{ fontSize: 12, color: 'var(--ink-4)', padding: '0 2px' }}>…</span>
+                : <button key={p} className="tabnum" onClick={() => setPage(p)} style={btnStyle(p === cur)}>{p}</button>
+            );
+          })()}
+        </div>
+      )}
 
       {editTarget && (
         <RecordEditModal
@@ -492,19 +583,34 @@ function AnalysisTab() {
           ))}
           {(() => {
             const totalPages = Math.max(1, Math.ceil(historyTotal / ANALYSIS_PAGE_SIZE));
-            return totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-                  style={{ padding: '6px 12px', fontSize: 12, color: page === 0 ? 'var(--ink-4)' : 'var(--ink-2)' }}>
-                  이전
-                </button>
-                <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                  {page + 1} / {totalPages}
-                </span>
-                <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-                  style={{ padding: '6px 12px', fontSize: 12, color: page >= totalPages - 1 ? 'var(--ink-4)' : 'var(--ink-2)' }}>
-                  다음
-                </button>
+            if (totalPages <= 1) return null;
+            const btnStyle = (active) => ({
+              minWidth: 32, height: 32, borderRadius: 'var(--r-sm)',
+              fontSize: 13, fontWeight: active ? 700 : 400,
+              background: active ? 'var(--primary)' : 'var(--surface-2)',
+              color: active ? '#fff' : 'var(--ink-2)',
+              border: active ? 'none' : '1px solid var(--line)',
+              cursor: active ? 'default' : 'pointer',
+            });
+            const cur = page + 1;
+            const pages = [];
+            if (totalPages <= 5) {
+              for (let i = 1; i <= totalPages; i++) pages.push(i);
+            } else {
+              const set = new Set([1, totalPages, cur, cur - 1, cur + 1]
+                .filter((n) => n >= 1 && n <= totalPages));
+              [...set].sort((a, b) => a - b).forEach((n, i, arr) => {
+                if (i > 0 && n - arr[i - 1] > 1) pages.push('…');
+                pages.push(n);
+              });
+            }
+            return (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                {pages.map((p, i) =>
+                  p === '…'
+                    ? <span key={`e${i}`} style={{ fontSize: 12, color: 'var(--ink-4)', padding: '0 2px' }}>…</span>
+                    : <button key={p} className="tabnum" onClick={() => setPage(p - 1)} style={btnStyle(p === cur)}>{p}</button>
+                )}
               </div>
             );
           })()}

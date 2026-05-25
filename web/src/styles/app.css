@@ -16,3 +16,12 @@
 @media (min-width: 481px) {
   body { background: #ddd; }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes progressPulse {
+  0%, 100% { margin-left: 0; width: 40%; }
+  50% { margin-left: 60%; width: 40%; }
+}

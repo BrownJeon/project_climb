@@ -52,6 +52,17 @@ function filterRoutes(routes, key) {
   });
 }
 
+function relativeDate(dateStr) {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (diff === 0) return '오늘';
+  if (diff === 1) return '어제';
+  if (diff < 7) return `${diff}일 전`;
+  if (diff < 30) return `${Math.floor(diff / 7)}주 전`;
+  if (diff < 365) return `${Math.floor(diff / 30)}개월 전`;
+  return `${Math.floor(diff / 365)}년 전`;
+}
+
 export default function FeedPage() {
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
@@ -59,6 +70,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ visits: 0, dates: [], total_cleared: 0, cleared_breakdown: [], training_by_category: {} });
   const [todayRoutines, setTodayRoutines] = useState([]);
+  const [recentGyms, setRecentGyms] = useState([]);
   const week = useMemo(() => getWeekRange(), []);
   const navigate = useNavigate();
 
@@ -77,6 +89,9 @@ export default function FeedPage() {
       const dow = new Date().getDay();
       setTodayRoutines(r.data?.routines?.[dow]?.items || []);
     }).catch(() => {});
+    climbLogsApi.visitedGymsWithDetail(8)
+      .then((r) => setRecentGyms(r.data?.gyms || []))
+      .catch(() => {});
   }, [week.from, week.to]);
 
   const routes = useMemo(() => {
@@ -151,6 +166,80 @@ export default function FeedPage() {
           </div>
         </div>
       </div>
+
+      {/* 최근 방문 암장 */}
+      {recentGyms.length > 0 && (
+        <div style={{ padding: '10px 0 4px' }}>
+          <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)' }}>최근 방문 암장</span>
+            <button
+              onClick={() => navigate('/gyms')}
+              style={{ fontSize: 11, color: 'var(--ink-4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              전체 보기 →
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 10, padding: '0 16px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+            {recentGyms.map((gym) => {
+              const problems = gym.last_log_problems || [];
+              const cleared = problems.filter((p) => p.cleared > 0);
+              const totalCleared = problems.reduce((s, p) => s + p.cleared, 0);
+              const totalAttempt = problems.reduce((s, p) => s + p.total, 0);
+              return (
+                <button
+                  key={gym.id}
+                  onClick={() => navigate(`/gyms/${gym.id}`)}
+                  style={{
+                    flexShrink: 0, width: 160,
+                    background: 'var(--surface)', border: '1px solid var(--line)',
+                    borderRadius: 'var(--r-md)', padding: '12px 14px',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, color: 'var(--ink-1)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+                  }}>
+                    {gym.name}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>
+                    {relativeDate(gym.last_visited_at)}
+                    <span className="tabnum" style={{ marginLeft: 6 }}>· {gym.visit_count}회</span>
+                  </span>
+
+                  {/* 문제 기록 요약 */}
+                  {totalAttempt > 0 ? (
+                    <>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {cleared.slice(0, 4).map((p) => {
+                          const m = colorMeta(p.color);
+                          return (
+                            <span key={p.color} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              fontSize: 11, padding: '2px 7px', borderRadius: 'var(--r-pill)',
+                              background: 'var(--surface-2)', border: '1px solid var(--line-2)',
+                              color: 'var(--ink-2)',
+                            }}>
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
+                              <span className="tabnum">{p.cleared}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--ink-4)' }} className="tabnum">
+                        완등 {totalCleared} / 시도 {totalAttempt}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>문제 기록 없음</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 오늘의 루틴 */}
       {todayRoutines.length > 0 && (

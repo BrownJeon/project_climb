@@ -1,74 +1,47 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import { Btn, ColorBadge, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import { climbLogsApi } from '../api/climbLogs';
+import ClearedSummary from '../components/ClearedSummary';
 import RecordActionMenu from '../components/RecordActionMenu';
 import RecordEditModal from '../components/modals/RecordEditModal';
-import ClearedSummary from '../components/ClearedSummary';
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function ymd(y, m, d) { return `${y}-${pad(m)}-${pad(d)}`; }
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const CAT_LABEL = { endurance: '지구력', conditioning: '컨디셔닝', general: '기타' };
 
 export default function CalendarPage() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
-  const [selected, setSelected] = useState(today.getDate());
   const [dotDates, setDotDates] = useState(new Set());
-  const [logs, setLogs] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [logs, setLogs] = useState([]);          // 선택 날짜 기록
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [monthLogs, setMonthLogs] = useState([]);  // 월 전체 기록
+  const [monthLoading, setMonthLoading] = useState(false);
   const [editLog, setEditLog] = useState(null);
-  const [reloadTick, setReloadTick] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
     climbLogsApi.monthDates(year, month).then((r) => {
       setDotDates(new Set(r.data?.dates || []));
     }).catch(() => {});
-  }, [year, month, reloadTick]);
+  }, [year, month]);
 
   useEffect(() => {
-    const date = ymd(year, month, selected);
-    climbLogsApi.byDate(date).then((r) => setLogs(r.data?.logs || [])).catch(() => {});
-  }, [year, month, selected, reloadTick]);
-
-  async function handleDeleteLog(log) {
-    if (!confirm('이 기록을 삭제하시겠어요? 되돌릴 수 없습니다.')) return;
-    try {
-      await climbLogsApi.remove(log.id);
-      setReloadTick((t) => t + 1);
-    } catch (e) {
-      alert(e.message || '삭제 실패');
-    }
-  }
-
-  // 인라인 +/- — 낙관적 갱신, 실패 시 롤백
-  async function handleAdjustProblem(logId, problemId, field, delta) {
-    const prevSnapshot = logs;
-    const target = (prevSnapshot.find((l) => l.id === logId)?.problems || []).find((p) => p.id === problemId);
-    if (!target) return;
-    const cur = Number(target[field] != null ? target[field] : (field === 'cleared_count' && target.is_cleared ? 1 : 0));
-    const next = Math.max(0, cur + delta);
-    if (next === cur) return;
-
-    setLogs((prev) => prev.map((l) => l.id !== logId ? l : ({
-      ...l,
-      problems: (l.problems || []).map((p) => {
-        if (p.id !== problemId) return p;
-        return { ...p, [field]: next, ...(field === 'cleared_count' ? { is_cleared: next > 0 } : {}) };
-      }),
-    })));
-
-    try {
-      await climbLogsApi.updateProblem(logId, problemId, { [field]: next });
-    } catch (e) {
-      setLogs(prevSnapshot); // 롤백
-      alert(e?.response?.data?.message || e.message || '갱신 실패');
-    }
-  }
+    const lastDay = new Date(year, month, 0).getDate();
+    const from = `${year}-${pad(month)}-01`;
+    const to = `${year}-${pad(month)}-${pad(lastDay)}`;
+    setMonthLoading(true);
+    climbLogsApi.byRange(from, to, { limit: 50 })
+      .then((r) => setMonthLogs(r.data?.logs || []))
+      .catch(() => setMonthLogs([]))
+      .finally(() => setMonthLoading(false));
+  }, [year, month]);
 
   const grid = useMemo(() => {
     const first = new Date(year, month - 1, 1);
@@ -84,17 +57,69 @@ export default function CalendarPage() {
     let m = month + dir, y = year;
     if (m === 0) { m = 12; y--; }
     if (m === 13) { m = 1; y++; }
-    setYear(y); setMonth(m); setSelected(1);
+    setYear(y); setMonth(m);
+    setSelected(null);
+  }
+
+  function handleDateClick(date) {
+    if (selected === date) {
+      setSelected(null);
+      return;
+    }
+    setSelected(date);
+    setLogs([]);
+    setLogsLoading(true);
+    climbLogsApi.byDate(date)
+      .then((r) => setLogs(r.data?.logs || []))
+      .catch(() => setLogs([]))
+      .finally(() => setLogsLoading(false));
+  }
+
+  async function handleAdjustProblem(logId, problemId, field, delta) {
+    const prevSnapshot = logs;
+    const target = (prevSnapshot.find((l) => l.id === logId)?.problems || []).find((p) => p.id === problemId);
+    if (!target) return;
+    const cur = Number(target[field] != null ? target[field] : (field === 'cleared_count' && target.is_cleared ? 1 : 0));
+    const next = Math.max(0, cur + delta);
+    if (next === cur) return;
+    setLogs((prev) => prev.map((l) => l.id !== logId ? l : ({
+      ...l,
+      problems: (l.problems || []).map((p) => {
+        if (p.id !== problemId) return p;
+        return { ...p, [field]: next, ...(field === 'cleared_count' ? { is_cleared: next > 0 } : {}) };
+      }),
+    })));
+    try {
+      await climbLogsApi.updateProblem(logId, problemId, { [field]: next });
+    } catch (e) {
+      setLogs(prevSnapshot);
+      alert(e?.response?.data?.message || e.message || '갱신 실패');
+    }
+  }
+
+  async function handleDelete(log) {
+    if (!confirm('이 기록을 삭제하시겠어요? 되돌릴 수 없습니다.')) return;
+    try {
+      await climbLogsApi.remove(log.id);
+      setLogs((prev) => prev.filter((l) => l.id !== log.id));
+      setMonthLogs((prev) => prev.filter((l) => l.id !== log.id));
+      setDotDates((prev) => {
+        const next = new Set(prev);
+        if (logs.filter((l) => l.id !== log.id).length === 0) next.delete(selected);
+        return next;
+      });
+    } catch (e) { alert(e.message || '삭제 실패'); }
   }
 
   const isToday = (d) =>
     d === today.getDate() && month === today.getMonth() + 1 && year === today.getFullYear();
 
-  const selectedDate = new Date(year, month - 1, selected);
-  const dayName = DAY_LABELS[selectedDate.getDay()];
-  // 신규: cleared_count 합산. 없는 row(레거시)는 is_cleared로 fallback.
-  const totalCleared = logs.reduce((acc, l) => acc + (l.problems || []).reduce((s, p) =>
-    s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0), 0);
+  const selectedD = selected ? Number(selected.split('-')[2]) : null;
+  const selectedDate = selected ? new Date(selected + 'T00:00:00') : null;
+  const dayName = selectedDate ? DAY_LABELS[selectedDate.getDay()] : '';
+  const totalCleared = logs.reduce((acc, l) =>
+    acc + (l.problems || []).reduce((s, p) =>
+      s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0), 0);
 
   return (
     <>
@@ -123,25 +148,22 @@ export default function CalendarPage() {
           if (!d) return <div key={i} />;
           const date = ymd(year, month, d);
           const has = dotDates.has(date);
-          const sel = selected === d;
           const todayMark = isToday(d);
+          const isSelected = selected === date;
           return (
-            <button key={i} onClick={() => {
-              if (selected === d) navigate(`/calendar/${date}`);
-              else setSelected(d);
-            }} style={{
+            <button key={i} onClick={() => handleDateClick(date)} style={{
               aspectRatio: '1', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center',
               borderRadius: 'var(--r-sm)', position: 'relative',
-              background: sel ? 'var(--ink-1)' : todayMark ? 'var(--primary-soft)' : 'transparent',
-              color: sel ? 'var(--surface)' : 'var(--ink-1)',
-              fontSize: 14, fontWeight: sel || todayMark ? 700 : 500,
+              background: isSelected ? 'var(--primary)' : todayMark ? 'var(--primary-soft)' : 'transparent',
+              color: isSelected ? '#fff' : 'var(--ink-1)',
+              fontSize: 14, fontWeight: (todayMark || isSelected) ? 700 : 500,
             }}>
               <span className="tabnum">{d}</span>
               {has && (
                 <span style={{
                   width: 5, height: 5, borderRadius: '50%',
-                  background: sel ? 'var(--surface)' : 'var(--primary)',
+                  background: isSelected ? 'rgba(255,255,255,0.7)' : 'var(--primary)',
                   marginTop: 2,
                 }} />
               )}
@@ -150,35 +172,50 @@ export default function CalendarPage() {
         })}
       </div>
 
-      {/* Selected day panel */}
-      <div style={{ padding: '12px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>{month}월 {selected}일 ({dayName}) 기록</div>
-        {totalCleared > 0 && <Pill tone="primary">{totalCleared}완등</Pill>}
-      </div>
-
-      <div style={{ padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {logs.length === 0 ? (
-          <div style={{
-            background: 'var(--surface)', border: '1px dashed var(--line-2)',
-            borderRadius: 'var(--r-md)', padding: 20, textAlign: 'center',
-            fontSize: 12.5, color: 'var(--ink-3)',
-          }}>
-            기록이 없습니다
+      {/* 월 전체 기록 (날짜 미선택 시) */}
+      {!selected && (
+        <div style={{ padding: '12px 16px 24px' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 10 }}>
+            {month}월 전체 기록
           </div>
-        ) : logs.map((log) => (
-          <div key={log.id}
-            onClick={() => navigate(`/logs/${log.id}`)}
-            role="button" tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/logs/${log.id}`); }}
-            style={{
-              background: 'var(--surface)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r-md)', cursor: 'pointer',
-            }}>
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>{log.gym_name}</div>
+          {monthLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', padding: 16 }}>로딩 중...</div>
+          ) : monthLogs.length === 0 ? (
+            <div style={{
+              background: 'var(--surface)', border: '1px dashed var(--line-2)',
+              borderRadius: 'var(--r-md)', padding: 20, textAlign: 'center',
+              fontSize: 12.5, color: 'var(--ink-3)',
+            }}>이번 달 기록이 없습니다</div>
+          ) : monthLogs.map((log) => {
+            const d = new Date((log.visited_at || '') + 'T00:00:00');
+            const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY_LABELS[d.getDay()]})`;
+            const logCleared = (log.problems || []).reduce((s, p) =>
+              s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0);
+            return (
+              <div key={log.id} style={{
+                background: 'var(--surface)', border: '1px solid var(--line)',
+                borderRadius: 'var(--r-md)', padding: '12px 14px', marginBottom: 8,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <button
+                    onClick={() => handleDateClick(log.visited_at)}
+                    style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}
+                  >{dateLabel}</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {logCleared > 0 && (
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--r-pill)', background: 'var(--primary-soft)', color: 'var(--primary)' }}>{logCleared}완등</span>
+                    )}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <RecordActionMenu
+                        onEdit={() => setEditLog(log)}
+                        onDelete={() => handleDelete(log)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{log.gym_name}</div>
                 {(log.gym_pass || log.used_day_pass) && (
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     {I.ticket(11)}
                     {log.gym_pass
                       ? `${log.gym_pass.label || (log.gym_pass.pass_type === 'period' ? '정기권' : '횟수권')}${log.gym_pass.pass_type === 'count' ? ` (잔여 ${log.gym_pass.remaining_count}회)` : ''}`
@@ -186,37 +223,108 @@ export default function CalendarPage() {
                   </div>
                 )}
                 {log.problems?.length > 0 && (
-                  <div style={{ marginTop: 8, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
-                    <ClearedSummary
-                      problems={log.problems}
-                      editable
-                      onAdjust={(pid, field, delta) => handleAdjustProblem(log.id, pid, field, delta)}
-                    />
-                  </div>
+                  <ClearedSummary problems={log.problems} />
                 )}
-                {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').length > 0 && (
-                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                    {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').map((s) => (
-                      <TrainingSessionRow key={s.id} session={s} />
-                    ))}
+                {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').map((s) => (
+                  <div key={s.id} style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 'var(--r-pill)', background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--line-2)' }}>{CAT_LABEL[s.category] || s.category}</span>
+                    {s.items?.[0] && <span style={{ color: 'var(--ink-2)' }}>{s.items[0].exercise_name}</span>}
+                  </div>
+                ))}
+                {log.memo && (
+                  <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ink-3)' }}>
+                    <span style={{ color: 'var(--ink-4)', marginRight: 4 }}>메모</span>{log.memo}
                   </div>
                 )}
               </div>
-              <RecordActionMenu
-                onEdit={() => setEditLog(log)}
-                onDelete={() => handleDeleteLog(log)}
-              />
-            </div>
+            );
+          })}
+        </div>
+      )}
 
-            {log.memo && (
-              <div style={{ padding: '10px 14px', fontSize: 12.5, color: 'var(--ink-2)' }}>
-                <span style={{ color: 'var(--ink-4)', fontSize: 11, marginRight: 6 }}>메모</span>
-                {log.memo}
-              </div>
-            )}
+      {/* 선택된 날짜 기록 — 인라인 편집 */}
+      {selected && (
+        <div style={{ padding: '12px 16px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>
+              {month}월 {selectedD}일 ({dayName})
+              {totalCleared > 0 && (
+                <span style={{
+                  marginLeft: 8, fontSize: 11, fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 'var(--r-pill)',
+                  background: 'var(--primary-soft)', color: 'var(--primary)',
+                }}>{totalCleared}완등</span>
+              )}
+            </span>
+            <button
+              onClick={() => navigate(`/calendar/${selected}`)}
+              style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2 }}
+            >전체보기 {I.chev(12)}</button>
           </div>
-        ))}
-      </div>
+
+          {logsLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', padding: 16 }}>로딩 중...</div>
+          ) : logs.length === 0 ? (
+            <div style={{
+              background: 'var(--surface)', border: '1px dashed var(--line-2)',
+              borderRadius: 'var(--r-md)', padding: 20, textAlign: 'center',
+              fontSize: 12.5, color: 'var(--ink-3)',
+            }}>기록이 없습니다</div>
+          ) : logs.map((log) => (
+            <div key={log.id} style={{
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)', padding: '12px 14px',
+              marginBottom: 8,
+            }}>
+              {/* 암장명 + 액션 메뉴 */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{log.gym_name}</div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <RecordActionMenu
+                    onEdit={() => setEditLog(log)}
+                    onDelete={() => handleDelete(log)}
+                  />
+                </div>
+              </div>
+              {(log.gym_pass || log.used_day_pass) && (
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {I.ticket(11)}
+                  {log.gym_pass
+                    ? `${log.gym_pass.label || (log.gym_pass.pass_type === 'period' ? '정기권' : '횟수권')}${log.gym_pass.pass_type === 'count' ? ` (잔여 ${log.gym_pass.remaining_count}회)` : ''}`
+                    : '일일이용권'}
+                </div>
+              )}
+
+              {/* 문제 편집 */}
+              {log.problems?.length > 0 && (
+                <ClearedSummary
+                  problems={log.problems}
+                  editable
+                  onAdjust={(pid, field, delta) => handleAdjustProblem(log.id, pid, field, delta)}
+                />
+              )}
+
+              {/* 훈련 세션 (볼더링 외) */}
+              {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').map((s) => (
+                <div key={s.id} style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 'var(--r-pill)',
+                    background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px solid var(--line-2)',
+                  }}>{CAT_LABEL[s.category] || s.category}</span>
+                  {s.items?.[0] && <span style={{ color: 'var(--ink-2)' }}>{s.items[0].exercise_name}</span>}
+                </div>
+              ))}
+
+              {/* 메모 */}
+              {log.memo && (
+                <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)' }}>
+                  <span style={{ color: 'var(--ink-4)', marginRight: 4 }}>메모</span>{log.memo}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {editLog && (
         <RecordEditModal
@@ -232,63 +340,20 @@ export default function CalendarPage() {
           }}
           onSubmit={async ({ memo, date, duration_minutes, start_time, end_time }) => {
             await climbLogsApi.update(editLog.id, { memo, visited_at: date, duration_minutes, start_time, end_time });
-            setReloadTick((t) => t + 1);
+            if (selected) climbLogsApi.byDate(selected).then((r) => setLogs(r.data?.logs || [])).catch(() => {});
+            const lastDay = new Date(year, month, 0).getDate();
+            climbLogsApi.byRange(`${year}-${pad(month)}-01`, `${year}-${pad(month)}-${pad(lastDay)}`, { limit: 50 })
+              .then((r) => setMonthLogs(r.data?.logs || [])).catch(() => {});
           }}
-          onChanged={() => setReloadTick((t) => t + 1)}
+          onChanged={() => {
+            if (selected) climbLogsApi.byDate(selected).then((r) => setLogs(r.data?.logs || [])).catch(() => {});
+            const lastDay = new Date(year, month, 0).getDate();
+            climbLogsApi.byRange(`${year}-${pad(month)}-01`, `${year}-${pad(month)}-${pad(lastDay)}`, { limit: 50 })
+              .then((r) => setMonthLogs(r.data?.logs || [])).catch(() => {});
+          }}
           onClose={() => setEditLog(null)}
         />
       )}
     </>
-  );
-}
-
-const CAT_LABEL = { endurance: '지구력', conditioning: '컨디셔닝', general: '기타' };
-
-function TrainingSessionRow({ session }) {
-  const it = session.items?.[0];
-  const cat = session.category;
-  const catLabel = CAT_LABEL[cat] || cat;
-
-  let detail = null;
-  if (cat === 'endurance' && it) {
-    const m = (it.exercise_name || '').match(/\((5\.[\w.]+)\)/);
-    const level = m ? m[1] : it.exercise_name;
-    const cleared = it.sets != null ? it.sets >= 1 : false;
-    const attempts = it.reps_or_seconds;
-    detail = (
-      <>
-        <span style={{ fontWeight: 600 }}>{level}</span>
-        <span style={{
-          fontSize: 11, fontWeight: 700, padding: '1px 6px',
-          borderRadius: 'var(--r-pill)',
-          background: cleared ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.10)',
-          color: cleared ? 'var(--success)' : 'var(--danger)',
-        }}>{cleared ? '완등' : '미완등'}</span>
-        {attempts != null && <span style={{ color: 'var(--ink-3)' }}>{attempts}회 시도</span>}
-      </>
-    );
-  } else if (cat === 'conditioning' && it) {
-    detail = (
-      <>
-        <span style={{ fontWeight: 600 }}>{it.exercise_name}</span>
-        {it.reps_or_seconds != null && (
-          <span style={{ color: 'var(--ink-3)' }}>{it.reps_or_seconds}{it.metric_unit || ''}</span>
-        )}
-      </>
-    );
-  } else if (cat === 'general' && session.memo) {
-    detail = <span style={{ color: 'var(--ink-3)' }}>{session.memo}</span>;
-  }
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, flexWrap: 'wrap' }}>
-      <span style={{
-        flexShrink: 0, fontSize: 11, fontWeight: 700,
-        padding: '1px 7px', borderRadius: 'var(--r-pill)',
-        background: 'var(--surface-2)', color: 'var(--ink-2)',
-        border: '1px solid var(--line-2)',
-      }}>{catLabel}</span>
-      {detail}
-    </div>
   );
 }

@@ -10,7 +10,7 @@ import { COLOR_KEYS, colorMeta } from '../utils/colors';
 import { STYLE_KEYS, styleLabel } from '../utils/style';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 5;
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function shiftDays(n) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
@@ -132,7 +132,7 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
         {items.map((p) => {
           const cleared = p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0);
           const failed = p.failed_count != null ? Number(p.failed_count) : 0;
-          const thumb = p.videos?.[0]?.ar_route?.thumbnail_url;
+          const thumb = p.thumbnail_url || p.videos?.[0]?.ar_route?.thumbnail_url;
           return (
             <div key={p.id} onClick={() => nav(`/logs/${p.log_id}`)}
               role="button" tabIndex={0}
@@ -199,16 +199,35 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
         })}
 
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 8 }}>
-            <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-              style={{ padding: '6px 12px', fontSize: 12, color: page === 0 ? 'var(--ink-4)' : 'var(--ink-2)' }}>
-              이전
-            </button>
-            <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>{page + 1} / {totalPages}</span>
-            <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-              style={{ padding: '6px 12px', fontSize: 12, color: page >= totalPages - 1 ? 'var(--ink-4)' : 'var(--ink-2)' }}>
-              다음
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, marginTop: 12, flexWrap: 'wrap' }}>
+            {(() => {
+              const btnStyle = (active) => ({
+                minWidth: 32, height: 32, borderRadius: 'var(--r-sm)',
+                fontSize: 13, fontWeight: active ? 700 : 400,
+                background: active ? 'var(--primary)' : 'var(--surface-2)',
+                color: active ? '#fff' : 'var(--ink-2)',
+                border: active ? 'none' : '1px solid var(--line)',
+                cursor: active ? 'default' : 'pointer',
+              });
+              // 표시할 페이지 번호 계산 (0-based → 1-based 표시)
+              const cur = page + 1;
+              const pages = [];
+              if (totalPages <= 5) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                const set = new Set([1, totalPages, cur, cur - 1, cur + 1]
+                  .filter((n) => n >= 1 && n <= totalPages));
+                [...set].sort((a, b) => a - b).forEach((n, i, arr) => {
+                  if (i > 0 && n - arr[i - 1] > 1) pages.push('…');
+                  pages.push(n);
+                });
+              }
+              return pages.map((p, i) =>
+                p === '…'
+                  ? <span key={`e${i}`} style={{ fontSize: 12, color: 'var(--ink-4)', padding: '0 2px' }}>…</span>
+                  : <button key={p} className="tabnum" onClick={() => setPage(p - 1)} style={btnStyle(p === cur)}>{p}</button>
+              );
+            })()}
           </div>
         )}
       </div>

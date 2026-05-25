@@ -88,17 +88,17 @@ export default function GymListPage() {
         }
       } else if (filterChip === 'recent') {
         try {
-          const r = await climbLogsApi.visitedGyms();
-          const ids = r.data?.gym_ids || [];
-          if (ids.length === 0) {
+          const r = await climbLogsApi.visitedGymsWithDetail(30);
+          const gyms = r.data?.gyms || [];
+          if (gyms.length === 0) {
             if (!cancelled) { setGyms([]); setFilterMessage('최근 방문한 암장 기록이 없습니다.'); }
-            return;
+          } else {
+            if (!cancelled) setGyms(gyms);
           }
-          params.ids = ids.join(',');
         } catch {
           if (!cancelled) setFilterMessage('방문 기록을 불러오지 못했습니다.');
-          return;
         }
+        return;
       }
 
       try {

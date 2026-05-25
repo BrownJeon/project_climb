@@ -1,29 +1,74 @@
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
+import { ColorBadge, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
+import { climbLogsApi } from '../api/climbLogs';
+import RecordActionMenu from '../components/RecordActionMenu';
+import RecordEditModal from '../components/modals/RecordEditModal';
+import ClearedSummary from '../components/ClearedSummary';
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const CAT_LABEL = { endurance: '지구력', conditioning: '컨디셔닝', general: '기타' };
 
 function formatHeader(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  return `${y}년 ${m}월 ${day}일 (${DAY_LABELS[d.getDay()]})`;
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY_LABELS[d.getDay()]})`;
 }
 
 export default function CalendarDetailPage() {
   const { date } = useParams();
   const nav = useNavigate();
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editLog, setEditLog] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    climbLogsApi.byDate(date)
+      .then((r) => setLogs(r.data?.logs || []))
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false));
+  }, [date, reloadTick]);
+
+  async function handleDelete(log) {
+    if (!confirm('이 기록을 삭제하시겠어요? 되돌릴 수 없습니다.')) return;
+    try {
+      await climbLogsApi.remove(log.id);
+      setReloadTick((t) => t + 1);
+    } catch (e) { alert(e.message || '삭제 실패'); }
+  }
+
+  async function handleAdjustProblem(logId, problemId, field, delta) {
+    const prevSnapshot = logs;
+    const target = (prevSnapshot.find((l) => l.id === logId)?.problems || []).find((p) => p.id === problemId);
+    if (!target) return;
+    const cur = Number(target[field] != null ? target[field] : (field === 'cleared_count' && target.is_cleared ? 1 : 0));
+    const next = Math.max(0, cur + delta);
+    if (next === cur) return;
+    setLogs((prev) => prev.map((l) => l.id !== logId ? l : ({
+      ...l,
+      problems: (l.problems || []).map((p) => {
+        if (p.id !== problemId) return p;
+        return { ...p, [field]: next, ...(field === 'cleared_count' ? { is_cleared: next > 0 } : {}) };
+      }),
+    })));
+    try {
+      await climbLogsApi.updateProblem(logId, problemId, { [field]: next });
+    } catch (e) {
+      setLogs(prevSnapshot);
+      alert(e?.response?.data?.message || e.message || '갱신 실패');
+    }
+  }
+
+  const totalCleared = logs.reduce((acc, l) => acc + (l.problems || []).reduce((s, p) =>
+    s + (p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0)), 0), 0);
 
   const backBtn = (
     <button onClick={() => nav(-1)} aria-label="뒤로"
-      style={{
-        width: 36, height: 36, borderRadius: 'var(--r-pill)',
-        display: 'grid', placeItems: 'center',
-        color: 'var(--ink-2)', background: 'var(--surface-2)',
-      }}>
+      style={{ padding: 6, color: 'var(--ink-3)' }}>
       {I.chev(16, 'left')}
     </button>
   );
@@ -32,53 +77,140 @@ export default function CalendarDetailPage() {
     <>
       <TopBar right={backBtn} />
 
-      <div style={{ padding: '14px 16px 6px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', letterSpacing: .4 }}>상세 기록</div>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, marginTop: 4 }}>
-          {formatHeader(date)}
-        </div>
+      <div style={{ padding: '14px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 18, fontWeight: 800 }}>{formatHeader(date)}</div>
+        {totalCleared > 0 && <Pill tone="primary">{totalCleared}완등</Pill>}
       </div>
 
-      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <PlaceholderSection title="🕒 시간라인">
-          시간 범위(09:00 ~ 11:30) 기준의 운동 흐름이 들어갈 영역입니다.
-        </PlaceholderSection>
-        <PlaceholderSection title="🎯 시도/완등 요약">
-          색상·V등급별 시도 횟수, 완등률, 평균 시도 횟수 통계가 표시될 영역입니다.
-        </PlaceholderSection>
-        <PlaceholderSection title="📹 영상 갤러리">
-          이날 등록한 영상 또는 시도에 링크된 영상의 인라인 재생 갤러리가 들어갈 영역입니다.
-        </PlaceholderSection>
-        <PlaceholderSection title="💪 훈련 세션">
-          볼더링/지구력/컨디셔닝 카테고리별 시간·항목 그래프가 표시될 영역입니다.
-        </PlaceholderSection>
-        <PlaceholderSection title="✨ AI 한 줄 요약">
-          이날의 운동을 한 문단으로 요약 (분석 endpoint 연계 예정).
-        </PlaceholderSection>
-        <PlaceholderSection title="📝 메모">
-          기록 메모와 시도별 메모를 확장 표시.
-        </PlaceholderSection>
+      <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {loading ? (
+          <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--ink-3)' }}>로딩 중...</div>
+        ) : logs.length === 0 ? (
+          <div style={{
+            background: 'var(--surface)', border: '1px dashed var(--line-2)',
+            borderRadius: 'var(--r-md)', padding: 28, textAlign: 'center',
+            fontSize: 13, color: 'var(--ink-3)',
+          }}>
+            이날 기록이 없습니다
+          </div>
+        ) : logs.map((log) => (
+          <div key={log.id}
+            onClick={() => nav(`/logs/${log.id}`)}
+            role="button" tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') nav(`/logs/${log.id}`); }}
+            style={{
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)', cursor: 'pointer',
+            }}>
+            <div style={{ padding: '12px 14px', borderBottom: (log.memo ? '1px solid var(--line)' : 'none'), display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>{log.gym_name}</div>
+                {(log.gym_pass || log.used_day_pass) && (
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {I.ticket(11)}
+                    {log.gym_pass
+                      ? `${log.gym_pass.label || (log.gym_pass.pass_type === 'period' ? '정기권' : '횟수권')}${log.gym_pass.pass_type === 'count' ? ` (잔여 ${log.gym_pass.remaining_count}회)` : ''}`
+                      : '일일이용권'}
+                  </div>
+                )}
+                {log.problems?.length > 0 && (
+                  <div style={{ marginTop: 4, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                    <ClearedSummary
+                      problems={log.problems}
+                      editable
+                      onAdjust={(pid, field, delta) => handleAdjustProblem(log.id, pid, field, delta)}
+                    />
+                  </div>
+                )}
+                {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                    {(log.training_sessions || []).filter((s) => s.category !== 'bouldering').map((s) => (
+                      <TrainingSessionRow key={s.id} session={s} />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div onClick={(e) => e.stopPropagation()}>
+                <RecordActionMenu
+                  onEdit={() => setEditLog(log)}
+                  onDelete={() => handleDelete(log)}
+                />
+              </div>
+            </div>
+            {log.memo && (
+              <div style={{ padding: '10px 14px', fontSize: 12.5, color: 'var(--ink-2)' }}>
+                <span style={{ color: 'var(--ink-4)', fontSize: 11, marginRight: 6 }}>메모</span>
+                {log.memo}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
-      <div style={{
-        margin: '4px 16px 16px', padding: '12px 14px', borderRadius: 'var(--r-md)',
-        background: 'var(--surface-2)', border: '1px dashed var(--line-2)',
-        fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.55,
-      }}>
-        ℹ️ 이 화면은 placeholder입니다. 상세 설계는 <code>docs/web-design/06-calendar-detail.md</code>에서 진행 예정.
-      </div>
+      {editLog && (
+        <RecordEditModal
+          kind="climb_log"
+          logId={editLog.id}
+          initial={{
+            memo: editLog.memo, date: editLog.visited_at,
+            duration_minutes: editLog.duration_minutes,
+            start_time: editLog.start_time, end_time: editLog.end_time,
+            problems: editLog.problems,
+            training_sessions: editLog.training_sessions,
+            gym_id: editLog.gym_id,
+          }}
+          onSubmit={async ({ memo, date: d, duration_minutes, start_time, end_time }) => {
+            await climbLogsApi.update(editLog.id, { memo, visited_at: d, duration_minutes, start_time, end_time });
+            setReloadTick((t) => t + 1);
+          }}
+          onChanged={() => setReloadTick((t) => t + 1)}
+          onClose={() => setEditLog(null)}
+        />
+      )}
     </>
   );
 }
 
-function PlaceholderSection({ title, children }) {
+function TrainingSessionRow({ session }) {
+  const it = session.items?.[0];
+  const cat = session.category;
+  const catLabel = CAT_LABEL[cat] || cat;
+
+  let detail = null;
+  if (cat === 'endurance' && it) {
+    const m = (it.exercise_name || '').match(/\((5\.[\w.]+)\)/);
+    const level = m ? m[1] : it.exercise_name;
+    const cleared = it.sets != null ? it.sets >= 1 : false;
+    detail = (
+      <>
+        <span style={{ fontWeight: 600 }}>{level}</span>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--r-pill)',
+          background: cleared ? 'rgba(34,197,94,.12)' : 'rgba(239,68,68,.10)',
+          color: cleared ? 'var(--success, #22c55e)' : 'var(--danger)',
+        }}>{cleared ? '완등' : '미완등'}</span>
+        {it.reps_or_seconds != null && <span style={{ color: 'var(--ink-3)' }}>{it.reps_or_seconds}회 시도</span>}
+      </>
+    );
+  } else if (cat === 'conditioning' && it) {
+    detail = (
+      <>
+        <span style={{ fontWeight: 600 }}>{it.exercise_name}</span>
+        {it.reps_or_seconds != null && <span style={{ color: 'var(--ink-3)' }}>{it.reps_or_seconds}{it.metric_unit || ''}</span>}
+      </>
+    );
+  } else if (cat === 'general' && session.memo) {
+    detail = <span style={{ color: 'var(--ink-3)' }}>{session.memo}</span>;
+  }
+
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--line)',
-      borderRadius: 'var(--r-md)', padding: '14px 16px',
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-1)', marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.55 }}>{children}</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, flexWrap: 'wrap' }}>
+      <span style={{
+        flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '1px 7px',
+        borderRadius: 'var(--r-pill)', background: 'var(--surface-2)',
+        color: 'var(--ink-2)', border: '1px solid var(--line-2)',
+      }}>{catLabel}</span>
+      {detail}
     </div>
   );
 }

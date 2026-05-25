@@ -51,6 +51,16 @@ const ClimbLogProblem = sequelize.define('ClimbLogProblem', {
     type: DataTypes.STRING(20), allowNull: true,
     comment: '볼더링 카테고리: slab/vertical/overhang/cave/other',
   },
+  video_url: {
+    type: DataTypes.STRING(500), allowNull: true,
+  },
+  thumbnail_url: {
+    type: DataTypes.STRING(500), allowNull: true,
+  },
+  video_status: {
+    type: DataTypes.ENUM('none', 'processing', 'ready', 'error'),
+    allowNull: false, defaultValue: 'none',
+  },
 }, {
   tableName: 'climb_log_problems',
   timestamps: false,

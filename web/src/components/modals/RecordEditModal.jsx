@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Btn, ColorBadge } from '../atoms';
 import { I } from '../atoms/Icons';
 import { climbLogsApi } from '../../api/climbLogs';
@@ -7,9 +7,8 @@ import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
 import { STYLE_KEYS, styleMeta } from '../../utils/style';
 import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '../TrainingItemFields';
 import TimeRangeField from '../TimeRangeField';
-import VideoLinkPicker from './VideoLinkPicker';
-import VideoChip from '../VideoChip';
 import ProblemPhotoModal from './ProblemPhotoModal';
+import { useVideoUpload } from '../../contexts/VideoUploadContext';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
@@ -55,17 +54,6 @@ function itemsToTrainingRow(category, items, duration_minutes, memo, start_time,
 
 // climb_log 수정용 entry 빌더
 function problemToEntry(p) {
-  const videos = (p.videos && p.videos.length)
-    ? p.videos
-    : (p.ar_route ? [{ id: p.ar_route_id || p.ar_route.id, ar_route: p.ar_route }] : []);
-  const ar_routes = videos
-    .filter((v) => v.ar_route)
-    .map((v) => ({
-      id: v.ar_route.id, title: v.ar_route.title,
-      thumbnail_url: v.ar_route.thumbnail_url,
-      color: v.ar_route.color, level: v.ar_route.level,
-    }));
-  const ar_route_ids = ar_routes.map((v) => v.id);
   return {
     _id: `cp-${p.id}`,
     _existingProblemId: p.id,
@@ -73,13 +61,14 @@ function problemToEntry(p) {
     _pendingDelete: false,
     _origCleared: Number(p.cleared_count != null ? p.cleared_count : (p.is_cleared ? 1 : 0)),
     _origFailed: Number(p.failed_count != null ? p.failed_count : 0),
-    _origVideoIds: [...ar_route_ids].sort().join(','),
     _origStyle: p.style || '',
     category: 'bouldering',
     color: p.color || '', level: p.level || '', style: p.style || '',
     cleared_count: p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0),
     failed_count: p.failed_count != null ? Number(p.failed_count) : 0,
-    ar_route_ids, ar_routes,
+    ar_route_ids: [], ar_routes: [],
+    video_url: p.video_url || p.ar_route?.video_url || null,
+    thumbnail_url: p.thumbnail_url || p.ar_route?.thumbnail_url || null,
     photos: p.photos || [],
     start_time: '', end_time: '', duration_minutes: '',
     endurance_level: '', cond_unit: 'count', cond_base: '', value: '', memo: '',
@@ -118,10 +107,28 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
     return [...fromProblems, ...fromTraining];
   }, [initial.problems, initial.training_sessions, kind]);
   const [entries, setEntries] = useState(initialEntries);
-  const [pickerForRow, setPickerForRow] = useState(null);
   const [photoTarget, setPhotoTarget] = useState(null); // { entryId, cpId, photo? }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const videoFileRef = useRef(null);
+  const [uploadTargetRow, setUploadTargetRow] = useState(null);
+  const { addTask } = useVideoUpload();
+
+  // 완료된 영상 업로드를 모달에 반영
+  useEffect(() => {
+    const handler = ({ detail }) => {
+      const { cpId, video_url, thumbnail_url } = detail;
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry._existingProblemId === cpId
+            ? { ...entry, video_url, thumbnail_url, _videoQueued: false }
+            : entry
+        )
+      );
+    };
+    window.addEventListener('theroute:videoUploaded', handler);
+    return () => window.removeEventListener('theroute:videoUploaded', handler);
+  }, []);
 
   const updateEntry = (id, patch) => setEntries((p) => p.map((r) => r._id === id ? { ...r, ...patch } : r));
   const removeEntry = (id) => setEntries((p) => p.map((r) => r._id === id ? { ...r, _pendingDelete: true } : r).filter((r) => !(r._isNew && r._pendingDelete)));
@@ -132,6 +139,8 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
     color: '', level: '', style: '',
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
+    video_url: null, thumbnail_url: null,
+    _pendingVideoFile: null, _pendingVideoFileName: '',
     endurance_level: '',
     endurance_cleared: false,
     endurance_attempts: '',
@@ -153,13 +162,19 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
         for (const e of entries.filter((x) => x._isNew && !x._pendingDelete)) {
           if (e.category === 'bouldering') {
             if (!e.color && !e.level) continue;
-            await climbLogsApi.addProblem(logId, {
+            const res = await climbLogsApi.addProblem(logId, {
               color: e.color || null, level: e.level || null,
               style: e.style || null,
               cleared_count: Number(e.cleared_count) || 0,
               failed_count: Number(e.failed_count) || 0,
               ar_route_ids: Array.isArray(e.ar_route_ids) ? e.ar_route_ids : [],
             });
+            if (e._pendingVideoFile) {
+              const newCpId = res.data?.problem?.id || res.data?.id;
+              if (newCpId) {
+                addTask({ logId, cpId: newCpId, file: e._pendingVideoFile });
+              }
+            }
           } else {
             const conv = rowToTrainingPayload(e);
             await trainingApi.createSession({
@@ -176,17 +191,13 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
           if (e._existingProblemId) {
             const cc = Number(e.cleared_count) || 0;
             const fc = Number(e.failed_count) || 0;
-            const newVid = [...(e.ar_route_ids || [])].sort().join(',');
             const updates = {};
             if (cc !== e._origCleared) updates.cleared_count = cc;
             if (fc !== e._origFailed) updates.failed_count = fc;
             if ((e.style || '') !== (e._origStyle || '')) updates.style = e.style || null;
-            const videosChanged = newVid !== e._origVideoIds;
-            if (Object.keys(updates).length || videosChanged) {
-              await climbLogsApi.updateProblem(logId, e._existingProblemId, {
-                ...updates,
-                ...(videosChanged ? { ar_route_ids: e.ar_route_ids || [] } : {}),
-              });
+            // 영상은 별도 uploadProblemVideo로 관리하므로 제외
+            if (Object.keys(updates).length) {
+              await climbLogsApi.updateProblem(logId, e._existingProblemId, updates);
             }
           } else if (e._existingTrainingId) {
             const conv = rowToTrainingPayload(e);
@@ -367,27 +378,63 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
                           />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>연결된 영상 ({(e.ar_route_ids || []).length})</div>
-                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            {(e.ar_routes || []).map((vid) => (
-                              <VideoChip key={vid.id}
-                                id={vid.id} title={vid.title}
-                                thumbnail_url={vid.thumbnail_url}
-                                color={vid.color || e.color}
-                                level={vid.level || e.level}
-                                onRemove={() => updateEntry(e._id, {
-                                  ar_route_ids: (e.ar_route_ids || []).filter((x) => x !== vid.id),
-                                  ar_routes: (e.ar_routes || []).filter((x) => x.id !== vid.id),
-                                })}
-                              />
-                            ))}
-                            <button type="button" onClick={() => setPickerForRow(e._id)}
-                              style={{
-                                fontSize: 11, fontWeight: 600,
-                                padding: '4px 9px', borderRadius: 'var(--r-pill)',
-                                border: '1px dashed var(--line-2)', background: 'var(--surface)',
-                                color: 'var(--primary)',
-                              }}>+ 영상 연결</button>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>영상</div>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {/* 기존 영상 미리보기 */}
+                            {e.video_url && (
+                              <div style={{ position: 'relative', width: 72, height: 72, borderRadius: 'var(--r-sm)', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
+                                {e.thumbnail_url
+                                  ? <img src={e.thumbnail_url} alt="영상" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,.6)', fontSize: 22 }}>▶</div>
+                                }
+                                {e._existingProblemId && (
+                                  <button type="button"
+                                    onClick={async () => {
+                                      try {
+                                        await climbLogsApi.removeProblemVideo(logId, e._existingProblemId);
+                                        updateEntry(e._id, { video_url: null, thumbnail_url: null });
+                                        onChanged?.();
+                                      } catch {}
+                                    }}
+                                    style={{
+                                      position: 'absolute', top: 2, right: 2,
+                                      width: 18, height: 18, borderRadius: '50%',
+                                      background: 'rgba(0,0,0,.6)', color: '#fff',
+                                      fontSize: 10, fontWeight: 700,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>✕</button>
+                                )}
+                              </div>
+                            )}
+                            {/* 신규: 대기 중인 영상 */}
+                            {!e.video_url && e._pendingVideoFileName ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4,
+                                fontSize: 11, color: 'var(--ink-2)',
+                                padding: '3px 8px', borderRadius: 'var(--r-pill)',
+                                background: 'var(--primary-soft)', border: '1px solid var(--primary-line)',
+                              }}>
+                                <span>📹 {e._pendingVideoFileName}</span>
+                                <button type="button"
+                                  onClick={() => updateEntry(e._id, { _pendingVideoFile: null, _pendingVideoFileName: '' })}
+                                  style={{ color: 'var(--ink-4)', background: 'none', padding: 0, fontSize: 12 }}>✕</button>
+                              </div>
+                            ) : null}
+                            {/* 업로드 버튼 */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              <button type="button"
+                                onClick={() => { setUploadTargetRow(e._id); videoFileRef.current?.click(); }}
+                                style={{
+                                  fontSize: 11, fontWeight: 600,
+                                  padding: '4px 9px', borderRadius: 'var(--r-pill)',
+                                  border: '1px solid var(--line-2)', background: 'var(--surface)',
+                                  color: 'var(--primary)', cursor: 'pointer',
+                                }}>
+                                {e.video_url ? '영상 교체' : '+ 영상 업로드'}
+                              </button>
+                              {e._videoQueued && (
+                                <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>백그라운드 처리 중...</span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -453,29 +500,27 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
           </Btn>
           <Btn variant="ghost" full onClick={onClose}>취소</Btn>
         </div>
-      </div>
 
-      {pickerForRow && (() => {
-        const a = entries.find((x) => x._id === pickerForRow);
-        return (
-          <VideoLinkPicker
-            defaultColor={a?.color || ''}
-            defaultLevel={a?.level || ''}
-            onPick={(r) => {
-              const ids = a?.ar_route_ids || [];
-              if (!ids.includes(r.id)) {
-                const list = a?.ar_routes || [];
-                updateEntry(pickerForRow, {
-                  ar_route_ids: [...ids, r.id],
-                  ar_routes: [...list, { id: r.id, title: r.title, thumbnail_url: r.thumbnail_url, color: r.color || r.problem?.color, level: r.level || r.problem?.level }],
-                });
-              }
-              setPickerForRow(null);
-            }}
-            onClose={() => setPickerForRow(null)}
-          />
-        );
-      })()}
+        <input ref={videoFileRef} type="file" accept="video/*" style={{ display: 'none' }}
+          onChange={(ev) => {
+            const file = ev.target.files?.[0];
+            ev.target.value = '';
+            if (!file || !uploadTargetRow) return;
+            if (!file.type.startsWith('video/')) { alert('영상 파일만 업로드 가능합니다.'); return; }
+            const rowId = uploadTargetRow;
+            setUploadTargetRow(null);
+            const entry = entries.find((x) => x._id === rowId);
+            if (!entry) return;
+
+            if (entry._existingProblemId && logId) {
+              addTask({ logId, cpId: entry._existingProblemId, file });
+              updateEntry(rowId, { _videoQueued: true });
+            } else {
+              updateEntry(rowId, { _pendingVideoFile: file, _pendingVideoFileName: file.name });
+            }
+          }}
+        />
+      </div>
 
       {photoTarget && (
         <ProblemPhotoModal
