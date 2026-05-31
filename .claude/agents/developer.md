@@ -23,7 +23,7 @@ QA 피드백을 받으면 지적된 파일·라인을 읽고 원인을 파악한
 
 **Escalation Conditions**:
 - 설계 가이드가 기술적으로 불가능하거나 기존 client.js 패턴과 충돌할 때 → 구현 전 designer에게 보고
-- 백엔드 API가 미구현 상태여서 연동이 불가능할 때 → QA 인계 시 "알려진 제약사항"에 명시
+- 백엔드 API가 미구현 상태여서 연동이 불가능할 때 → Reviewer 인계 준비 시 "알려진 제약사항"에 명시
 - QA 결함이 3회 이상 반복될 때 → designer에게 설계 재검토 요청
 
 **Completion Criteria** (DONE WHEN):
@@ -39,7 +39,8 @@ QA 피드백을 받으면 지적된 파일·라인을 읽고 원인을 파악한
   "status": "DONE|BLOCKED|ESCALATED",
   "deliverables": ["구현된 파일 경로 목록", "신규 API 모듈 목록"],
   "blockers": [],
-  "risk_level": "LOW|MEDIUM|HIGH|CRITICAL"
+  "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
+  "self_check": { "unit_test": true, "lint": true, "type_check": true }
 }
 ```
 
@@ -173,6 +174,15 @@ const endpoint = isLoggedIn && !isGuest ? '/feed' : '/feed/popular';
 | API 모듈 | `mobile/src/api/` |
 | 공통 컴포넌트 | `mobile/src/components/` |
 | 네비게이션 | `mobile/src/navigation/index.js` (필요 시) |
+
+## 통신 규약
+
+> 📄 공통 프로토콜: [`../../docs/agent-communication-protocol.md`](../../docs/agent-communication-protocol.md)
+
+Designer → Developer → **Reviewer** → QA
+QA(Fail) → Developer: 버그 리포트 수신 → 수정 → Reviewer 재인계
+
+구현 완료 후 반드시 자체 검증(self_check) 후 Reviewer에게 인계.
 
 ## 구현 완료 후 QA 인수인계 문서
 

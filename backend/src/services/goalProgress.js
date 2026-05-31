@@ -11,6 +11,7 @@
  *                  지구력 항목 등록 횟수
  *  - general    : 자유 입력이라 자동 매핑 불가 (사용자 수동 갱신)
  */
+const { Op } = require('sequelize');
 const {
   TrainingGoal, TrainingSession, TrainingSessionItem,
   ClimbLog, ClimbLogProblem, Problem, Gym,
@@ -34,10 +35,11 @@ function parseConditioningLabel(label) {
   return { base: m[1].trim(), unit: m[2] };
 }
 
-async function computeBoulderingCurrent(userId, color, { targetGymId, targetBrand, targetLevel } = {}) {
+async function computeBoulderingCurrent(userId, color, { targetGymId, targetBrand, targetLevel, startDate } = {}) {
   if (!color) return 0;
   const climbLogWhere = { user_id: userId };
   if (targetGymId) climbLogWhere.gym_id = Number(targetGymId);
+  if (startDate) climbLogWhere.visited_at = { [Op.gte]: startDate };
 
   const climbLogInclude = {
     model: ClimbLog, as: 'log', required: true, attributes: [],
@@ -50,8 +52,6 @@ async function computeBoulderingCurrent(userId, color, { targetGymId, targetBran
     }];
   }
 
-  // 색상/V등급 매칭: problem.color 또는 cp.custom_color, 같은 식으로 level
-  const { Op } = require('sequelize');
   const cps = await ClimbLogProblem.findAll({
     attributes: ['cleared_count', 'is_cleared', 'problem_id', 'custom_color', 'custom_level'],
     where: {
@@ -87,16 +87,17 @@ async function computeBoulderingCurrent(userId, color, { targetGymId, targetBran
   return cps.reduce((acc, cp) => acc + (cp.cleared_count != null ? Number(cp.cleared_count) : (cp.is_cleared ? 1 : 0)), 0);
 }
 
-async function computeEnduranceCurrent(userId, level) {
+async function computeEnduranceCurrent(userId, level, { startDate } = {}) {
   if (!level) return 0;
-  const { Op } = require('sequelize');
   const exerciseName = `지구력 등반 (${level})`;
+  const sessionWhere = { user_id: userId, category: 'endurance' };
+  if (startDate) sessionWhere.session_date = { [Op.gte]: startDate };
   // sets >= 1 = 완등 기록만 카운트
   const count = await TrainingSessionItem.count({
     where: { exercise_name: exerciseName, sets: { [Op.gte]: 1 } },
     include: [{
       model: TrainingSession, as: 'session', required: true,
-      attributes: [], where: { user_id: userId, category: 'endurance' },
+      attributes: [], where: sessionWhere,
     }],
   });
   return count;
@@ -138,12 +139,13 @@ async function recomputeUserGoals(userId) {
           targetGymId: g.target_gym_id,
           targetBrand: g.target_brand,
           targetLevel: g.target_level,
+          startDate: g.start_date || null,
         });
       } else if (g.category === 'conditioning' && g.metric_label) {
         const parsed = parseConditioningLabel(g.metric_label);
         if (parsed) current = await computeConditioningCurrent(userId, parsed.base, parsed.unit);
       } else if (g.category === 'endurance' && g.metric_label) {
-        current = await computeEnduranceCurrent(userId, g.metric_label);
+        current = await computeEnduranceCurrent(userId, g.metric_label, { startDate: g.start_date || null });
       }
     } catch (err) {
       console.warn('[goalProgress] compute fail goal=', g.id, err.message);
@@ -155,7 +157,7 @@ async function recomputeUserGoals(userId) {
     const updates = {};
     if (Number(g.current_value) !== current) updates.current_value = current;
     if (g.progress_percent !== pct) updates.progress_percent = pct;
-    if (pct >= 100 && g.status === 'in_progress') updates.status = 'done';
+    // 자동 status='done' 변경 제거 — 사용자가 직접 완료 처리
     if (Object.keys(updates).length > 0) {
       try {
         await g.update(updates);

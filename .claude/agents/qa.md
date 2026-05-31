@@ -49,6 +49,14 @@ model: haiku
 - 실제 코드를 읽지 않고 추측으로 체크리스트를 통과 처리하는 행위
 </operation_contract>
 
+## 통신 규약
+
+> 📄 공통 프로토콜: [`../../docs/agent-communication-protocol.md`](../../docs/agent-communication-protocol.md)
+
+Reviewer → QA: 구현 완료 + high_risk_areas 수신
+QA → Designer: Pass 시 최종 검증 완료 보고 (Designer가 오케스트레이터)
+QA(Fail) → Developer: 버그 리포트 전달 (재현·기대·실제 3종)
+
 ## 프로젝트 컨텍스트
 
 - 모바일: React Native + Expo SDK 54

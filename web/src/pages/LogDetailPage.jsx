@@ -116,8 +116,9 @@ export default function LogDetailPage() {
         {(log.problems || []).map((p, i) => {
           const cleared = p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0);
           const failed = p.failed_count != null ? Number(p.failed_count) : (p.is_cleared ? 0 : 1);
-          const videoUrl = p.video_url || p.videos?.[0]?.ar_route?.video_url || (p.ar_route?.video_url) || null;
-          const thumbUrl = p.thumbnail_url || p.videos?.[0]?.ar_route?.thumbnail_url || (p.ar_route?.thumbnail_url) || null;
+          const personalVideos = (p.personal_videos || []).filter((v) => v.video_status === 'ready');
+          const processingVideos = (p.personal_videos || []).filter((v) => v.video_status === 'processing');
+          const hasMedia = personalVideos.length > 0 || processingVideos.length > 0 || (p.photos || []).length > 0;
           return (
             <div key={p.id || i} style={{
               background: 'var(--surface)', border: '1px solid var(--line)',
@@ -126,7 +127,7 @@ export default function LogDetailPage() {
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                 padding: '10px 14px',
-                borderBottom: videoUrl ? '1px solid var(--line)' : 'none',
+                borderBottom: hasMedia ? '1px solid var(--line)' : 'none',
               }}>
                 <ColorBadge color={p.color} level={p.level} size="sm" />
                 {cleared > 0 && (
@@ -142,20 +143,28 @@ export default function LogDetailPage() {
                 {cleared === 0 && failed === 0 && (
                   <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {p.attempts || 1}회</span>
                 )}
+                {processingVideos.length > 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                    📹 처리 중 {processingVideos.length}개...
+                  </span>
+                )}
               </div>
-              {videoUrl && (
+              {/* 영상 목록 */}
+              {personalVideos.map((v) => (
                 <video
-                  src={videoUrl}
-                  poster={thumbUrl || undefined}
+                  key={v.id}
+                  src={v.video_url}
+                  poster={v.thumbnail_url || undefined}
                   controls
                   playsInline
                   preload="metadata"
                   style={{
                     width: '100%', display: 'block', background: '#000',
                     aspectRatio: '9 / 16', objectFit: 'contain',
+                    borderBottom: '1px solid var(--line)',
                   }}
                 />
-              )}
+              ))}
               {(p.photos || []).map((ph) => (
                 <PhotoAnalysis key={ph.id} photo={ph} />
               ))}

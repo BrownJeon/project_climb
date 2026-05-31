@@ -4,7 +4,7 @@ const { videoUpload, imageUpload } = require('../middleware/upload');
 const {
   getLogDates, getLogsByDate, getLogsByGym, getLogById, createLog, updateLog, deleteLog,
   updateLogProblem, deleteLogProblem, addLogProblem,
-  uploadProblemVideo, removeProblemVideo, getProblemVideoStatus,
+  uploadProblemVideo, removeProblemVideo, getProblemVideoStatus, deletePersonalVideo,
   uploadProblemPhoto, updateProblemPhoto, deleteProblemPhoto,
   listLogProblems,
   getSummary,
@@ -98,6 +98,7 @@ router.get('/', optionalAuth, (req, res, next) => {
   if (req.query.gym_id || req.query.from) return getLogsByGym(req, res, next);
   return getLogDates(req, res, next);
 });
+router.get('/personal-videos/:pvId/status', optionalAuth, getProblemVideoStatus);
 router.get('/:id', optionalAuth, getLogById);
 
 router.post('/', optionalAuth, createLog);
@@ -108,7 +109,7 @@ router.patch('/:logId/problems/:cpId', optionalAuth, updateLogProblem);
 router.delete('/:logId/problems/:cpId', optionalAuth, deleteLogProblem);
 router.post('/:logId/problems/:cpId/video', optionalAuth, videoUpload.single('video'), uploadProblemVideo);
 router.delete('/:logId/problems/:cpId/video', optionalAuth, removeProblemVideo);
-router.get('/:logId/problems/:cpId/video-status', optionalAuth, getProblemVideoStatus);
+router.delete('/:logId/problems/:cpId/personal-videos/:pvId', optionalAuth, deletePersonalVideo);
 router.post('/:logId/problems/:cpId/photos', optionalAuth, imageUpload.single('photo'), uploadProblemPhoto);
 router.patch('/:logId/problems/:cpId/photos/:photoId', optionalAuth, updateProblemPhoto);
 router.delete('/:logId/problems/:cpId/photos/:photoId', optionalAuth, deleteProblemPhoto);

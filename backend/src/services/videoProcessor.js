@@ -5,7 +5,6 @@
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
-const { extractThumbnail, thumbnailUrlFor } = require('./thumbnail');
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 
@@ -29,11 +28,7 @@ function runFfmpeg(args) {
   });
 }
 
-/**
- * 영상 압축 + 썸네일 생성 + DB 갱신을 백그라운드로 실행.
- * 컨트롤러는 await 없이 호출 → 응답 지연 0.
- */
-function processVideoBackground({ ClimbLogProblem, cpId, inputPath, qualityKey }) {
+function processPersonalVideoBackground({ PersonalVideo, pvId, inputPath, qualityKey }) {
   setImmediate(async () => {
     try {
       const preset = qualityKey === 'original' ? null : (PRESETS[qualityKey] || PRESETS.standard);
@@ -47,11 +42,10 @@ function processVideoBackground({ ClimbLogProblem, cpId, inputPath, qualityKey }
         const compressedFilename = `c_${baseName}.mp4`;
         const compressedPath = path.join(dir, compressedFilename);
 
-        const scale = `scale='min(${preset.maxRes},iw)':-2`;
         await runFfmpeg([
           '-y', '-loglevel', 'error',
           '-i', inputPath,
-          '-vf', `${scale},fps=${preset.fps}`,
+          '-vf', `scale='min(${preset.maxRes},iw)':-2,fps=${preset.fps}`,
           '-c:v', 'libx264',
           '-crf', String(preset.crf),
           '-preset', 'fast',
@@ -60,27 +54,26 @@ function processVideoBackground({ ClimbLogProblem, cpId, inputPath, qualityKey }
           compressedPath,
         ]);
 
-        // 원본 삭제, 압축본으로 교체
         fs.unlink(inputPath, () => {});
         finalPath = compressedPath;
         finalFilename = compressedFilename;
       }
 
-      // 썸네일
+      const { extractThumbnail, thumbnailUrlFor } = require('./thumbnail');
       const thumbOut = await extractThumbnail(finalPath);
       const thumbUrl = thumbOut ? thumbnailUrlFor(finalFilename) : null;
       const videoUrl = `${process.env.MEDIA_BASE_URL}/${finalFilename}`;
 
-      await ClimbLogProblem.update(
+      await PersonalVideo.update(
         { video_url: videoUrl, thumbnail_url: thumbUrl, video_status: 'ready' },
-        { where: { id: cpId } }
+        { where: { id: pvId } }
       );
-      console.log(`[videoProcessor] cp(${cpId}) 완료 → ${videoUrl}`);
+      console.log(`[videoProcessor] personal_video(${pvId}) 완료 → ${videoUrl}`);
     } catch (e) {
-      console.error(`[videoProcessor] cp(${cpId}) 실패: ${e.message}`);
-      await ClimbLogProblem.update({ video_status: 'error' }, { where: { id: cpId } }).catch(() => {});
+      console.error(`[videoProcessor] personal_video(${pvId}) 실패: ${e.message}`);
+      await PersonalVideo.update({ video_status: 'error' }, { where: { id: pvId } }).catch(() => {});
     }
   });
 }
 
-module.exports = { processVideoBackground };
+module.exports = { processPersonalVideoBackground };

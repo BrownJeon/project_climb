@@ -35,9 +35,14 @@ export default function GrowthPage() {
   const [summary, setSummary] = useState(null);
   const [goals, setGoals] = useState([]);
   const [styleStats, setStyleStats] = useState([]);
+  const [recentGyms, setRecentGyms] = useState([]);
 
   const from = RANGES.find(([k]) => k === rangeKey)?.[2] || shiftDays(-30);
   const to = todayISO();
+
+  useEffect(() => {
+    climbLogsApi.visitedGymsWithDetail(10).then((r) => setRecentGyms(r.data?.gyms || [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     climbLogsApi.summary(from, to).then((r) => setSummary(r.data)).catch(() => {});
@@ -153,6 +158,37 @@ export default function GrowthPage() {
                   {g.target_date && (
                     <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 3 }}>마감 {g.target_date}</div>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 최근 방문 암장 */}
+        {recentGyms.length > 0 && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>최근 방문 암장</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {recentGyms.map((g, idx) => (
+                <div key={g.id || idx} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', borderRadius: 'var(--r-sm)',
+                  background: 'var(--surface-2)', border: '1px solid var(--line)',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {g.name}
+                    </div>
+                    {g.address && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {g.address}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div className="tabnum" style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>{g.visit_count}회</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--ink-4)', marginTop: 1 }}>{g.last_visited_at?.slice(5)}</div>
+                  </div>
                 </div>
               ))}
             </div>

@@ -50,6 +50,15 @@ model: opus
 - 기존 색상 팔레트 외 색상을 설계에 포함하는 행위
 </operation_contract>
 
+## 통신 규약
+
+> 📄 공통 프로토콜: [`../../docs/agent-communication-protocol.md`](../../docs/agent-communication-protocol.md)
+
+사용자/Designer(오케스트레이터) → Developer → Reviewer → QA → Designer → 사용자
+
+Designer가 오케스트레이터 역할: Developer에게 구현 가이드 전달, QA 최종 보고 수신.
+직렬 전달 원칙: 이전 단계 결과 + 본인 작업만 전달.
+
 ## 프로젝트 컨텍스트
 
 **기술 스택**

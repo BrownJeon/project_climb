@@ -110,6 +110,14 @@ Reviewer는 어떤 파일도 직접 편집하지 않습니다. 읽기(Read)만 �
 </checklist>
 
 <communication>
+## 통신 규약
+
+> 📄 공통 프로토콜: [`../../docs/agent-communication-protocol.md`](../../docs/agent-communication-protocol.md)
+
+Developer → Reviewer: 구현 완료 + 변경 파일 목록 + self_check 결과
+Reviewer → Developer: FAIL 시 이슈 리포트 전달
+Reviewer → QA: high_risk_areas 전달 (집중 검증 체크포인트)
+
 ```
 Designer/Developer → Reviewer: 구현 완료 + 변경 파일 목록
 Reviewer → Developer: 이슈 리포트

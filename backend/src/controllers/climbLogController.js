@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
-const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, sequelize } = require('../models');
+const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, ClimbLogProblemPersonalVideo, sequelize } = require('../models');
 const { attachThumbnailAsync, attachThumbnailToClimbProblem } = require('../services/thumbnail');
-const { processVideoBackground } = require('../services/videoProcessor');
+const { processPersonalVideoBackground } = require('../services/videoProcessor');
 const { recomputeUserGoals } = require('../services/goalProgress');
 const { computeDurationMinutes, normalizeTime } = require('../utils/timeRange');
 
@@ -79,6 +79,7 @@ async function getLogsByDate(req, res, next) {
               include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url', 'color', 'level'], required: false }],
             },
             { model: ClimbLogProblemPhoto, as: 'photos', required: false },
+            { model: ClimbLogProblemPersonalVideo, as: 'personal_videos', required: false },
           ],
         },
       ],
@@ -142,6 +143,11 @@ async function getLogsByDate(req, res, next) {
         })),
         video_url: p.video_url || p.ar_route?.video_url || null,
         thumbnail_url: p.thumbnail_url || p.ar_route?.thumbnail_url || null,
+        personal_videos: (p.personal_videos || []).map((v) => ({
+          id: v.id, video_url: v.video_url,
+          thumbnail_url: v.thumbnail_url, video_status: v.video_status,
+          sort_order: v.sort_order,
+        })),
         photos: (p.photos || []).map((ph) => ({
           id: ph.id, photo_url: ph.photo_url,
           hold_annotations: ph.hold_annotations,
@@ -184,6 +190,7 @@ async function getLogById(req, res, next) {
               include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url', 'color', 'level'], required: false }],
             },
             { model: ClimbLogProblemPhoto, as: 'photos', required: false },
+            { model: ClimbLogProblemPersonalVideo, as: 'personal_videos', required: false },
           ],
         },
       ],
@@ -242,6 +249,11 @@ async function getLogById(req, res, next) {
         })),
         video_url: p.video_url || p.ar_route?.video_url || null,
         thumbnail_url: p.thumbnail_url || p.ar_route?.thumbnail_url || null,
+        personal_videos: (p.personal_videos || []).map((v) => ({
+          id: v.id, video_url: v.video_url,
+          thumbnail_url: v.thumbnail_url, video_status: v.video_status,
+          sort_order: v.sort_order,
+        })),
         photos: (p.photos || []).map((ph) => ({
           id: ph.id, photo_url: ph.photo_url,
           hold_annotations: ph.hold_annotations,
@@ -572,43 +584,38 @@ async function addLogProblem(req, res, next) {
 
 /**
  * POST /api/climb-logs/:logId/problems/:cpId/video  (multipart `video`)
- * 기존 항목에 영상 업로드 (또는 교체). 기존 ar_route_id는 새 ArRoute로 덮어쓰기.
+ * 개인 영상 업로드 — ClimbLogProblemPersonalVideo 레코드 생성 후 백그라운드 처리.
  */
 async function uploadProblemVideo(req, res, next) {
   try {
     const userId = req.user.id;
     const { logId, cpId } = req.params;
-    if (!req.file) {
-      return res.status(400).json({ success: false, data: null, message: '영상 파일이 필요합니다.' });
-    }
+    if (!req.file) return res.status(400).json({ success: false, data: null, message: '영상 파일이 필요합니다.' });
     const cp = await ClimbLogProblem.findByPk(cpId);
-    if (!cp || Number(cp.log_id) !== Number(logId)) {
-      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
-    }
+    if (!cp || Number(cp.log_id) !== Number(logId)) return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
     const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
-    if (!parent || Number(parent.user_id) !== Number(userId)) {
-      return res.status(403).json({ success: false, data: null, message: '권한 없음' });
-    }
+    if (!parent || Number(parent.user_id) !== Number(userId)) return res.status(403).json({ success: false, data: null, message: '권한 없음' });
 
-    let color = cp.custom_color, level = cp.custom_level;
-    if (cp.problem_id) {
-      const p = await Problem.findByPk(cp.problem_id, { attributes: ['color', 'level'] });
-      if (p) { color = p.color; level = p.level; }
-    }
     const qualityKey = req.body?.quality || 'standard';
     const tempVideoUrl = `${process.env.MEDIA_BASE_URL}/${req.file.filename}`;
-    await cp.update({ video_url: tempVideoUrl, thumbnail_url: null, video_status: 'processing' });
 
-    processVideoBackground({
-      ClimbLogProblem,
-      cpId: cp.id,
+    const pv = await ClimbLogProblemPersonalVideo.create({
+      climb_log_problem_id: cp.id,
+      video_url: tempVideoUrl,
+      thumbnail_url: null,
+      video_status: 'processing',
+    });
+
+    processPersonalVideoBackground({
+      PersonalVideo: ClimbLogProblemPersonalVideo,
+      pvId: pv.id,
       inputPath: req.file.path,
       qualityKey,
     });
 
     return res.json({
       success: true,
-      data: { video_url: tempVideoUrl, thumbnail_url: null, video_status: 'processing' },
+      data: { pvId: pv.id, video_url: tempVideoUrl, thumbnail_url: null, video_status: 'processing' },
       message: '영상이 업로드되었습니다. 서버에서 처리 중입니다.',
     });
   } catch (err) { next(err); }
@@ -636,26 +643,37 @@ async function removeProblemVideo(req, res, next) {
 }
 
 /**
- * GET /api/climb-logs/:logId/problems/:cpId/video-status
- * 영상 처리 상태 폴링용
+ * GET /api/climb-logs/personal-videos/:pvId/status
+ * 개인 영상 처리 상태 폴링용
  */
 async function getProblemVideoStatus(req, res, next) {
   try {
-    const { logId, cpId } = req.params;
-    const cp = await ClimbLogProblem.findByPk(cpId, {
-      attributes: ['id', 'log_id', 'video_url', 'thumbnail_url', 'video_status'],
+    const { pvId } = req.params;
+    const pv = await ClimbLogProblemPersonalVideo.findByPk(pvId, {
+      attributes: ['id', 'climb_log_problem_id', 'video_url', 'thumbnail_url', 'video_status'],
     });
-    if (!cp || Number(cp.log_id) !== Number(logId)) {
-      return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
-    }
+    if (!pv) return res.status(404).json({ success: false, data: null, message: '영상을 찾을 수 없습니다.' });
     return res.json({
       success: true,
-      data: {
-        video_status: cp.video_status || 'none',
-        video_url: cp.video_url || null,
-        thumbnail_url: cp.thumbnail_url || null,
-      },
+      data: { pvId: pv.id, video_status: pv.video_status, video_url: pv.video_url, thumbnail_url: pv.thumbnail_url },
     });
+  } catch (err) { next(err); }
+}
+
+/**
+ * DELETE /api/climb-logs/:logId/problems/:cpId/personal-videos/:pvId
+ * 개인 영상 삭제
+ */
+async function deletePersonalVideo(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { logId, cpId, pvId } = req.params;
+    const pv = await ClimbLogProblemPersonalVideo.findByPk(pvId);
+    if (!pv || Number(pv.climb_log_problem_id) !== Number(cpId)) return res.status(404).json({ success: false, data: null, message: '영상을 찾을 수 없습니다.' });
+    const parent = await ClimbLog.findByPk(logId, { attributes: ['user_id'] });
+    if (!parent || Number(parent.user_id) !== Number(userId)) return res.status(403).json({ success: false, data: null, message: '권한 없음' });
+    await pv.destroy();
+    return res.json({ success: true, data: null, message: '영상이 삭제되었습니다.' });
   } catch (err) { next(err); }
 }
 
@@ -741,21 +759,29 @@ async function getSummary(req, res, next) {
       return (COLOR_ORDER.indexOf(a.color) + 1 || 99) - (COLOR_ORDER.indexOf(b.color) + 1 || 99);
     });
 
-    // 훈련 세션 카테고리별 카운트
+    // 카테고리별 카운트
+    // - bouldering: climb_log_problems이 있는 climb_log 수 (training_sessions에 없음)
+    // - 나머지: training_sessions를 session_date 기준으로 그룹핑 (항목 개수가 아닌 날짜 단위)
     const trainingByCategory = { bouldering: 0, endurance: 0, conditioning: 0 };
+    trainingByCategory.bouldering = logs.filter((l) => (l.problems || []).length > 0).length;
     try {
       const tsessions = await TrainingSession.findAll({
         where: { user_id: userId, session_date: { [Op.between]: [from, to] } },
-        attributes: ['category'],
+        attributes: ['category', 'session_date'],
       });
+      // 같은 날짜에 같은 카테고리가 여러 row여도 1회만 카운트
+      const catDateSets = {};
       tsessions.forEach((t) => {
         const c = t.category;
-        if (c) trainingByCategory[c] = (trainingByCategory[c] || 0) + 1;
+        if (!c || c === 'bouldering') return; // bouldering은 위에서 처리
+        if (!catDateSets[c]) catDateSets[c] = new Set();
+        catDateSets[c].add(String(t.session_date).slice(0, 10));
+      });
+      Object.entries(catDateSets).forEach(([c, s]) => {
+        trainingByCategory[c] = s.size;
       });
     } catch {}
 
-    // visits = 등록된 운동 단위 (climb_logs row 수). 같은 날 여러 번 등록도 모두 카운트.
-    // training_sessions는 보통 climb_log에 묶여 함께 등록되므로 별도 카운트하지 않음.
     const visits = logs.length;
 
     res.json({
@@ -834,6 +860,7 @@ async function listLogProblems(req, res, next) {
             include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'thumbnail_url'], required: false }],
           },
           { model: ClimbLogProblemPhoto, as: 'photos', required: false, attributes: ['id'] },
+          { model: ClimbLogProblemPersonalVideo, as: 'personal_videos', required: false, attributes: ['id', 'thumbnail_url', 'video_status'] },
         ],
       });
       // pageIds 순서로 정렬
@@ -859,6 +886,7 @@ async function listLogProblems(req, res, next) {
         id: v.id, ar_route_id: v.ar_route_id,
         ar_route: v.ar_route ? v.ar_route.toJSON() : null,
       })),
+      thumbnail_url: p.personal_videos?.[0]?.thumbnail_url || p.thumbnail_url || p.ar_route?.thumbnail_url || null,
       photo_count: (p.photos || []).length,
     }));
 
@@ -1091,7 +1119,7 @@ module.exports = {
   getLogDates, getLogsByDate, getLogsByGym, getLogById, createLog, updateLog, deleteLog,
   updateLogProblem, deleteLogProblem,
   addLogProblem,
-  uploadProblemVideo, removeProblemVideo, getProblemVideoStatus,
+  uploadProblemVideo, removeProblemVideo, getProblemVideoStatus, deletePersonalVideo,
   uploadProblemPhoto, updateProblemPhoto, deleteProblemPhoto,
   listLogProblems,
   getSummary,

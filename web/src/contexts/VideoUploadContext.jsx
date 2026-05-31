@@ -1,10 +1,10 @@
 /**
  * 영상 업로드 + 서버 처리 대기 컨텍스트
  *
- * 흐름: 파일 선택 → 즉시 서버 업로드(진행률 표시) → 서버 백그라운드 압축/썸네일
- *       → 3초마다 폴링 → 완료 시 이벤트 dispatch
+ * 흐름: 파일 선택 → 즉시 서버 업로드(진행률) → 서버 백그라운드 압축/썸네일
+ *       → 3초마다 pvId 폴링 → 완료 시 이벤트 dispatch
  *
- * 영속성: 업로드 완료 후 'processing' 태스크를 localStorage에 저장.
+ * 영속성: 업로드 완료 후 'processing' 태스크(pvId 포함)를 localStorage에 저장.
  *         브라우저 새로고침/재접속 시 복원해 폴링 재개.
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
@@ -19,18 +19,16 @@ const Ctx = createContext({ addTask: () => {}, tasks: [], removeTask: () => {}, 
 
 // ── localStorage 헬퍼 ──────────────────────────────────────────
 function loadPersisted() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || '[]');
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  catch { return []; }
 }
 function savePersisted(tasks) {
   const keep = tasks
-    .filter((t) => t.status === 'processing' || t.status === 'polling')
-    .map(({ id, logId, cpId, filename, addedAt }) => ({ id, logId, cpId, filename, addedAt }));
+    .filter((t) => (t.status === 'processing' || t.status === 'polling') && t.pvId)
+    .map(({ id, logId, cpId, pvId, filename, addedAt }) => ({ id, logId, cpId, pvId, filename, addedAt }));
   localStorage.setItem(LS_KEY, JSON.stringify(keep));
 }
 
-// ── 초기 태스크 복원 (앱 시작 시) ────────────────────────────
 function restoreTasks() {
   const now = Date.now();
   return loadPersisted()
@@ -40,16 +38,15 @@ function restoreTasks() {
 
 export function VideoUploadProvider({ children }) {
   const [tasks, setTasks] = useState(restoreTasks);
-  const pollingRef = useRef(new Set()); // 현재 폴링 중인 taskId
-  const uploadingRef = useRef(new Set()); // 현재 업로드 중인 taskId
+  const pollingRef = useRef(new Set());
+  const uploadingRef = useRef(new Set());
 
-  // tasks 변경 시 localStorage 동기화
   useEffect(() => { savePersisted(tasks); }, [tasks]);
 
   const patchTask = useCallback((id, patch) =>
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t))), []);
 
-  // ── 폴링 루프 ────────────────────────────────────────────────
+  // ── 폴링 루프 (pvId 기반) ────────────────────────────────────
   const startPolling = useCallback((task) => {
     if (pollingRef.current.has(task.id)) return;
     pollingRef.current.add(task.id);
@@ -63,39 +60,32 @@ export function VideoUploadProvider({ children }) {
         return;
       }
       try {
-        const res = await climbLogsApi.getProblemVideoStatus(task.logId, task.cpId);
-        const { video_status, video_url, thumbnail_url } = res.data?.data || {};
+        const res = await climbLogsApi.getProblemVideoStatus(task.pvId);
+        const { video_status, video_url, thumbnail_url, pvId } = res.data?.data || {};
 
         if (video_status === 'ready') {
           clearInterval(timerId);
           pollingRef.current.delete(task.id);
           patchTask(task.id, { status: 'done', progress: 1, statusMsg: '완료', video_url, thumbnail_url });
           window.dispatchEvent(new CustomEvent('theroute:videoUploaded', {
-            detail: { logId: task.logId, cpId: task.cpId, video_url, thumbnail_url },
+            detail: { logId: task.logId, cpId: task.cpId, pvId: task.pvId, video_url, thumbnail_url },
           }));
         } else if (video_status === 'error') {
           clearInterval(timerId);
           pollingRef.current.delete(task.id);
           patchTask(task.id, { status: 'error', statusMsg: '서버 처리 실패' });
         }
-        // 'processing' 상태면 계속 폴링
-      } catch {
-        // 네트워크 오류는 무시하고 폴링 계속
-      }
+      } catch { /* 네트워크 오류 무시, 폴링 계속 */ }
     }, POLL_INTERVAL);
   }, [patchTask]);
 
-  // 앱 시작 시 복원된 태스크 폴링 재개
   useEffect(() => {
-    tasks
-      .filter((t) => t.status === 'polling')
-      .forEach((t) => startPolling(t));
+    tasks.filter((t) => t.status === 'polling').forEach((t) => startPolling(t));
   }, []); // eslint-disable-line
 
-  // 새로 processing 상태가 된 태스크 감지 → 폴링 시작
   useEffect(() => {
     tasks
-      .filter((t) => t.status === 'processing' && !pollingRef.current.has(t.id))
+      .filter((t) => t.status === 'processing' && t.pvId && !pollingRef.current.has(t.id))
       .forEach((t) => startPolling(t));
   }, [tasks, startPolling]);
 
@@ -112,18 +102,18 @@ export function VideoUploadProvider({ children }) {
         quality: qualityKey,
         onUploadProgress: (evt) => {
           const ratio = evt.total ? evt.loaded / evt.total : 0;
-          patchTask(task.id, { progress: ratio * 0.95, statusMsg: `업로드 중... ${Math.round(ratio * 100)}%` });
+          patchTask(task.id, { progress: ratio * 0.9, statusMsg: `업로드 중... ${Math.round(ratio * 100)}%` });
         },
       });
 
-      const { video_status, video_url, thumbnail_url } = res.data?.data || {};
+      const { pvId, video_status, video_url, thumbnail_url } = res.data?.data || {};
       patchTask(task.id, {
         status: 'processing',
-        progress: 0.95,
+        pvId,
+        progress: 0.9,
         statusMsg: '서버에서 처리 중...',
         video_url,
         thumbnail_url,
-        video_status,
       });
     } catch (e) {
       patchTask(task.id, { status: 'error', statusMsg: '업로드 실패: ' + (e?.message || '오류') });
@@ -132,7 +122,6 @@ export function VideoUploadProvider({ children }) {
     }
   }, [patchTask]);
 
-  // 'queued' 태스크 감지 → 업로드 시작
   useEffect(() => {
     tasks
       .filter((t) => t.status === 'queued' && !uploadingRef.current.has(t.id))

@@ -25,8 +25,10 @@ export const climbLogsApi = {
       onUploadProgress,
     });
   },
-  getProblemVideoStatus: (logId, cpId) =>
-    client.get(`/climb-logs/${logId}/problems/${cpId}/video-status`),
+  getProblemVideoStatus: (pvId) =>
+    client.get(`/climb-logs/personal-videos/${pvId}/status`),
+  deletePersonalVideo: (logId, cpId, pvId) =>
+    client.delete(`/climb-logs/${logId}/problems/${cpId}/personal-videos/${pvId}`),
   removeProblemVideo: (logId, cpId) => client.delete(`/climb-logs/${logId}/problems/${cpId}/video`),
   uploadProblemPhoto: (logId, cpId, file, extra = {}) => {
     const fd = new FormData();

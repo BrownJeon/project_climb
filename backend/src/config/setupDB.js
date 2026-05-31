@@ -474,6 +474,34 @@ async function migrateClimbLogProblemVideos() {
   `);
 }
 
+async function migratePersonalVideos() {
+  await createTableIfMissing('climb_log_problem_personal_videos', `
+    CREATE TABLE climb_log_problem_personal_videos (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      climb_log_problem_id BIGINT UNSIGNED NOT NULL,
+      video_url VARCHAR(500) NOT NULL,
+      thumbnail_url VARCHAR(500) NULL,
+      video_status ENUM('processing','ready','error') NOT NULL DEFAULT 'processing',
+      sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_problem_id (climb_log_problem_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 기존 video_url(ready 상태)을 새 테이블로 마이그레이션 (중복 방지)
+  await sequelize.query(`
+    INSERT IGNORE INTO climb_log_problem_personal_videos
+      (climb_log_problem_id, video_url, thumbnail_url, video_status)
+    SELECT clp.id, clp.video_url, clp.thumbnail_url, 'ready'
+    FROM climb_log_problems clp
+    WHERE clp.video_url IS NOT NULL
+      AND clp.video_status = 'ready'
+      AND NOT EXISTS (
+        SELECT 1 FROM climb_log_problem_personal_videos pv
+        WHERE pv.climb_log_problem_id = clp.id
+      )
+  `);
+}
+
 async function seedPromptTemplate() {
   await sequelize.query(
     `INSERT IGNORE INTO training_prompt_templates
@@ -507,6 +535,7 @@ async function setupDB() {
   await migrateMaxLevel();
   await migrateMainGym();
   await migrateClimbLogProblemVideos();
+  await migratePersonalVideos();
   await seedPromptTemplate();
 
   console.log('[setupDB] 완료');

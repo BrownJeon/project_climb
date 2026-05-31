@@ -201,9 +201,10 @@ function RecordsTab() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const limit = view === 'all' ? 30 : 10;
     const params = view !== 'all'
-      ? { view, offset: viewOffset }
-      : { page, limit: 30 };
+      ? { view, offset: viewOffset, page, limit }
+      : { page, limit };
     trainingApi.sessions(params).then((r) => setData({
       sessions: r.data?.sessions || [],
       summary: r.data?.summary || null,
@@ -248,7 +249,8 @@ function RecordsTab() {
     setReloadTick((tk) => tk + 1);
   }
 
-  const totalPages = Math.ceil(data.total / 30);
+  const pageLimit = view === 'all' ? 30 : 10;
+  const totalPages = Math.ceil(data.total / pageLimit);
 
   return (
     <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -263,14 +265,14 @@ function RecordsTab() {
       {view !== 'all' && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <button
-            onClick={() => setViewOffset((o) => o - 1)}
+            onClick={() => { setViewOffset((o) => o - 1); setPage(1); }}
             style={{ fontSize: 13, color: 'var(--ink-2)', padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)', cursor: 'pointer' }}
           >{'‹'} 이전</button>
           <span style={{ fontSize: 12, color: 'var(--ink-2)', fontWeight: 600 }}>
             {data.period ? `${data.period.from} ~ ${data.period.to}` : ''}
           </span>
           <button
-            onClick={() => setViewOffset((o) => Math.min(o + 1, 0))}
+            onClick={() => { setViewOffset((o) => Math.min(o + 1, 0)); setPage(1); }}
             disabled={viewOffset >= 0}
             style={{ fontSize: 13, color: viewOffset >= 0 ? 'var(--ink-4)' : 'var(--ink-2)', padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-pill)', cursor: viewOffset >= 0 ? 'default' : 'pointer' }}
           >다음 {'›'}</button>
@@ -361,8 +363,8 @@ function RecordsTab() {
         );
       })}
 
-      {/* 전체 뷰 페이징 */}
-      {view === 'all' && totalPages > 1 && (
+      {/* 페이징 */}
+      {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, paddingTop: 4, flexWrap: 'wrap' }}>
           {(() => {
             const btnStyle = (active) => ({

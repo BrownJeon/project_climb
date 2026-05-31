@@ -261,9 +261,9 @@ async function listSessions(req, res, next) {
       summary.total.minutes += s.duration_minutes || 0;
     }
 
-    // 페이징 (week/month view는 전체 반환, view=undefined는 page/limit 적용)
+    // 페이징 — 모든 뷰에 적용
     const total = all.length;
-    const sessions = view ? all : all.slice((page - 1) * limit, page * limit);
+    const sessions = all.slice((page - 1) * limit, page * limit);
 
     return res.json({
       success: true,
@@ -272,8 +272,8 @@ async function listSessions(req, res, next) {
         summary,
         period: { from, to, view: view || 'all', offset: offsetInt },
         total,
-        page: view ? 1 : page,
-        limit: view ? total : limit,
+        page,
+        limit,
       },
       message: null,
     });
@@ -427,7 +427,12 @@ async function analyze(req, res, next) {
   for (const e of existingAnalyses) {
     const eFrom = e.period_from; // DATEONLY → string 'YYYY-MM-DD'
     const eTo = e.period_to;
-    // Case A: 기존 기간이 신규 기간을 포함 → 기존 결과 반환
+    // Case A: 완전 동일 범위 → 기존 삭제 후 재실행 (upsert)
+    if (eFrom === from && eTo === to) {
+      await e.destroy();
+      continue;
+    }
+    // Case B: 기존 기간이 신규보다 엄격히 넓게 포함 → 기존 결과 반환
     if (eFrom <= from && eTo >= to) {
       const full = await TrainingAnalysis.findByPk(e.id);
       if (wantStream) {
@@ -441,7 +446,7 @@ async function analyze(req, res, next) {
       }
       return res.json({ success: true, data: formatAnalysisRow(full), message: null });
     }
-    // Case B: 신규 기간이 기존 기간�� 포함 → 기존 삭제 후 신규 실행
+    // Case C: 신규 기간이 기존 기간을 포함 → 기존 삭제 후 신규 실행
     if (from <= eFrom && to >= eTo) {
       await e.destroy();
     }
@@ -530,13 +535,22 @@ async function listAnalyses(req, res, next) {
   try {
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 100);
     const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
-    const { rows, count } = await TrainingAnalysis.findAndCountAll({
+    const all = await TrainingAnalysis.findAll({
       where: { user_id: req.user.id },
       attributes: ['id', 'period_from', 'period_to', 'perspectives', 'duration_ms', 'created_at',
                    'template_key', 'template_version'],
       order: [['created_at', 'DESC']],
-      limit, offset,
     });
+    // 더 넓은 기간의 분석이 있으면 좁은 것은 제외
+    const deduped = all.filter((a) =>
+      !all.some((b) =>
+        b.id !== a.id &&
+        b.period_from <= a.period_from &&
+        b.period_to >= a.period_to
+      )
+    );
+    const total = deduped.length;
+    const rows = deduped.slice(offset, offset + limit);
     const analyses = rows.map((r) => {
       let perspectives = r.perspectives;
       if (typeof perspectives === 'string') {
@@ -550,7 +564,7 @@ async function listAnalyses(req, res, next) {
         template: r.template_key ? { key: r.template_key, version: r.template_version } : null,
       };
     });
-    return res.json({ success: true, data: { analyses, total: count, limit, offset }, message: null });
+    return res.json({ success: true, data: { analyses, total, limit, offset }, message: null });
   } catch (e) { next(e); }
 }
 
