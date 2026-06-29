@@ -57,6 +57,23 @@ Reviewer → QA: 구현 완료 + high_risk_areas 수신
 QA → Designer: Pass 시 최종 검증 완료 보고 (Designer가 오케스트레이터)
 QA(Fail) → Developer: 버그 리포트 전달 (재현·기대·실제 3종)
 
+<validation_loop>
+## 검증 순환 정책 (Validation Loop)
+
+결함 발견 시 Designer/Leader 경유 없이 Developer와 직접 소통하고,
+수정 후에는 QA 단계에서 직접 재실행하는 것이 아니라 **Reviewer 단계부터 전체 사이클을 재시작**한다.
+
+**결함 발견 시 (직접 소통)**:
+- Designer/Leader 경유 없이 Developer에게 직접 수정 요청
+- 결함 리포트 형식: 재현 방법 + 기대 결과 + 실제 결과 명시
+
+**Developer 수정 완료 후**:
+- QA가 직접 재실행하지 않는다
+- **Reviewer에게 사이클 재시작 알림** → Reviewer 의도 재검증 → QA 실행 재검증 (전체 순환)
+
+**동일 결함 3회 이상 재발 시**: Designer/Leader에게 에스컬레이션
+</validation_loop>
+
 ## 프로젝트 컨텍스트
 
 - 모바일: React Native + Expo SDK 54

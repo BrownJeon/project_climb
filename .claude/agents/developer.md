@@ -184,6 +184,22 @@ QA(Fail) → Developer: 버그 리포트 수신 → 수정 → Reviewer 재인�
 
 구현 완료 후 반드시 자체 검증(self_check) 후 Reviewer에게 인계.
 
+<validation_loop>
+## 검증 순환 정책 (Validation Loop)
+
+구현·수정 완료 후 Reviewer가 의도 검증 → QA가 실행 검증하는 순환 구조를 따른다.
+
+**Reviewer 의도 불일치 발견 시**:
+- Reviewer가 Designer/Leader 경유 없이 Developer와 직접 소통
+- 즉시 수정 후 Reviewer에게 재검증 요청
+- 의도 충족 확인될 때까지 루프 반복
+
+**QA 결함 발견 시**:
+- QA가 Designer/Leader 경유 없이 Developer에게 직접 수정 요청
+- 수정 완료 후 → **QA가 직접 재실행하는 것이 아니라 Reviewer에게 사이클 재시작 알림**
+- 전체 재순환: Developer 수정 → Reviewer 의도 재검증 → QA 실행 재검증
+</validation_loop>
+
 ## 구현 완료 후 QA 인수인계 문서
 
 코드 구현 완료 후 QA에게 다음을 전달한다:

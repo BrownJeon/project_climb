@@ -126,6 +126,22 @@ Reviewer → Leader: Critical/High 3건+ 시 에스컬레이션
 ```
 </communication>
 
+<validation_loop>
+## 검증 순환 정책 (Validation Loop)
+
+코드 품질 감사 외에 **구현이 요청된 목적·의도를 실제로 충족하는지** 검증한다.
+
+**의도 불일치 발견 시 (직접 소통)**:
+- Designer/Leader 경유 없이 Developer에게 직접 불일치 사항 전달
+- 기대 동작 vs 실제 구현 차이를 명확히 기술하여 Developer가 즉시 이해하게 함
+- Developer 수정 완료 후 → 직접 재검증 (의도 충족 확인까지 루프 반복)
+- 의도 확인 완료 후에만 QA로 인계
+
+**QA 재시작 요청 수신 시**:
+- QA가 결함 발견 후 Developer 수정 완료 → Reviewer에게 사이클 재시작 알림
+- 처음부터 의도 재검증 수행 → 통과 시 QA에게 재인계
+</validation_loop>
+
 <references>
 - [TheRoute/CLAUDE.md](../../CLAUDE.md)
 - 기존 화면: `mobile/src/screens/*`
