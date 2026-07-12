@@ -1,0 +1,48 @@
+filters:
+  and:
+    - file.hasTag("type/task")
+
+properties:
+  note.task_id:
+    displayName: Task ID
+  note.title:
+    displayName: 제목
+  note.status:
+    displayName: 상태
+  note.roles_involved:
+    displayName: 역할
+  note.updated:
+    displayName: 갱신일
+
+views:
+  - type: table
+    name: "전체 작업"
+    groupBy:
+      property: note.status
+    order:
+      - note.task_id
+      - note.title
+      - note.status
+      - note.roles_involved
+      - note.updated
+
+  - type: table
+    name: "진행 중"
+    filters:
+      and:
+        - 'note.status == "doing"'
+    order:
+      - note.updated
+      - note.task_id
+      - note.title
+      - note.roles_involved
+
+  - type: table
+    name: "완료"
+    filters:
+      and:
+        - 'note.status == "done"'
+    order:
+      - note.updated
+      - note.task_id
+      - note.title
