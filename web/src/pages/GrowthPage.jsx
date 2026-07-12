@@ -45,7 +45,7 @@ export default function GrowthPage() {
   }, []);
 
   useEffect(() => {
-    climbLogsApi.summary(from, to).then((r) => setSummary(r.data)).catch(() => {});
+    climbLogsApi.summary({ from, to }).then((r) => setSummary(r.data)).catch(() => {});
     trainingApi.goals().then((r) => setGoals(r.data?.goals || [])).catch(() => {});
     climbLogsApi.listProblems({ from, to, limit: 200 }).then((r) => {
       const items = r.data?.items || [];

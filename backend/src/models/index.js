@@ -21,6 +21,9 @@ const TrainingSessionItem = require('./TrainingSessionItem');
 const TrainingPromptTemplate = require('./TrainingPromptTemplate');
 const TrainingAnalysis = require('./TrainingAnalysis');
 const TrainingRoutine = require('./TrainingRoutine');
+const GymSector = require('./GymSector');
+const GymSectorReset = require('./GymSectorReset');
+const GymSectorSchedule = require('./GymSectorSchedule');
 
 // User - Gym (deprecated 단일 main_gym_id, 호환 유지)
 User.belongsTo(Gym, { foreignKey: 'main_gym_id', as: 'mainGym' });
@@ -46,6 +49,26 @@ User.belongsTo(Gym, { foreignKey: 'max_level_gym_id', as: 'max_level_gym' });
 // Gym - Problem
 Gym.hasMany(Problem, { foreignKey: 'gym_id', as: 'problems' });
 Problem.belongsTo(Gym, { foreignKey: 'gym_id', as: 'gym' });
+
+// Gym - GymSector (섹터)
+Gym.hasMany(GymSector, { foreignKey: 'gym_id', as: 'sectors' });
+GymSector.belongsTo(Gym, { foreignKey: 'gym_id' });
+
+// Gym - GymSectorReset (문제 교체)
+Gym.hasMany(GymSectorReset, { foreignKey: 'gym_id', as: 'resets' });
+GymSectorReset.belongsTo(Gym, { foreignKey: 'gym_id' });
+GymSectorReset.belongsTo(GymSector, { foreignKey: 'sector_id', as: 'sector' });
+GymSector.hasMany(GymSectorReset, { foreignKey: 'sector_id', as: 'resets' });
+
+// Gym - GymSectorSchedule (교체 주기 스케줄)
+Gym.hasMany(GymSectorSchedule, { foreignKey: 'gym_id', as: 'schedules' });
+GymSectorSchedule.belongsTo(Gym, { foreignKey: 'gym_id' });
+GymSectorSchedule.belongsTo(GymSector, { foreignKey: 'sector_id', as: 'sector' });
+GymSector.hasMany(GymSectorSchedule, { foreignKey: 'sector_id', as: 'schedules' });
+
+// Problem - GymSector
+Problem.belongsTo(GymSector, { foreignKey: 'sector_id', as: 'sector' });
+GymSector.hasMany(Problem, { foreignKey: 'sector_id', as: 'problems' });
 
 // Problem - ArRoute
 Problem.hasMany(ArRoute, { foreignKey: 'problem_id', as: 'arRoutes' });
@@ -170,4 +193,5 @@ module.exports = {
   TrainingGoal, TrainingSession, TrainingSessionItem,
   TrainingPromptTemplate, TrainingAnalysis,
   TrainingRoutine,
+  GymSector, GymSectorReset, GymSectorSchedule,
 };

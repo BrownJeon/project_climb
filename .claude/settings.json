@@ -1,0 +1,19 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/context-inject.sh" } ] }
+    ],
+    "SubagentStart": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/context-inject.sh" } ] }
+    ],
+    "SubagentStop": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/log-gate.sh" } ] }
+    ],
+    "TaskCompleted": [
+      { "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/log-gate.sh" } ] }
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, ClimbLogProblemPersonalVideo, sequelize } = require('../models');
+const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, ClimbLogProblemPersonalVideo, sequelize, GymSector } = require('../models');
 const { attachThumbnailAsync, attachThumbnailToClimbProblem } = require('../services/thumbnail');
 const { processPersonalVideoBackground } = require('../services/videoProcessor');
 const { recomputeUserGoals } = require('../services/goalProgress');
@@ -182,7 +182,12 @@ async function getLogById(req, res, next) {
         {
           model: ClimbLogProblem, as: 'problems',
           include: [
-            { model: Problem, as: 'problem', attributes: ['id', 'level', 'color', 'section'], required: false },
+            {
+              model: Problem, as: 'problem',
+              attributes: ['id', 'level', 'color', 'section', 'sector_id'],
+              include: [{ model: GymSector, as: 'sector', attributes: ['id', 'name'], required: false }],
+              required: false,
+            },
             { model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url'], required: false },
             {
               model: require('../models').ClimbLogProblemVideo, as: 'video_links',
@@ -239,6 +244,8 @@ async function getLogById(req, res, next) {
         cleared_count: p.cleared_count,
         failed_count: p.failed_count,
         style: p.style,
+        sector_id: p.problem?.sector_id || null,
+        sector_name: p.problem?.sector?.name || null,
         ar_route_id: p.ar_route_id,
         ar_route: p.ar_route ? p.ar_route.toJSON() : null,
         videos: (p.video_links || []).map((v) => ({
@@ -453,7 +460,7 @@ async function updateLogProblem(req, res, next) {
     if (!cp || Number(cp.log_id) !== Number(logId)) {
       return res.status(404).json({ success: false, data: null, message: '항목을 찾을 수 없습니다.' });
     }
-    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id'] });
+    const parent = await ClimbLog.findByPk(cp.log_id, { attributes: ['user_id', 'gym_id'] });
     if (!parent || Number(parent.user_id) !== Number(userId)) {
       return res.status(403).json({ success: false, data: null, message: '권한 없음' });
     }
@@ -478,12 +485,28 @@ async function updateLogProblem(req, res, next) {
       updates.failed_count = n;
     }
     if (req.body.style !== undefined) updates.style = req.body.style || null;
+    const sectorIdProvided = req.body.sector_id !== undefined;
+    const newSectorId = sectorIdProvided ? (req.body.sector_id || null) : undefined;
     const videosProvided = Array.isArray(req.body.ar_route_ids);
 
-    if (Object.keys(updates).length === 0 && !videosProvided) {
+    if (Object.keys(updates).length === 0 && !videosProvided && !sectorIdProvided) {
       return res.status(400).json({ success: false, data: null, message: '수정할 항목이 없습니다.' });
     }
     if (Object.keys(updates).length) await cp.update(updates);
+    if (sectorIdProvided) {
+      if (cp.problem_id) {
+        await Problem.update({ sector_id: newSectorId }, { where: { id: cp.problem_id } });
+      } else if (newSectorId && parent.gym_id) {
+        const problem = await Problem.create({
+          gym_id: parent.gym_id,
+          sector_id: newSectorId,
+          color: cp.custom_color || null,
+          level: cp.custom_level || null,
+          section: null,
+        });
+        await cp.update({ problem_id: problem.id });
+      }
+    }
     if (videosProvided) {
       const { ClimbLogProblemVideo, ArRoute } = require('../models');
       await ClimbLogProblemVideo.destroy({ where: { climb_log_problem_id: cp.id } });
@@ -532,7 +555,7 @@ async function addLogProblem(req, res, next) {
   try {
     const userId = req.user.id;
     const { logId } = req.params;
-    const { color, level, style, cleared_count, failed_count, ar_route_ids } = req.body || {};
+    const { color, level, style, cleared_count, failed_count, ar_route_ids, sector_id, gym_id: bodyGymId } = req.body || {};
     if (!color && !level) {
       return res.status(400).json({ success: false, data: null, message: '색상 또는 등급을 입력하세요.' });
     }
@@ -541,16 +564,28 @@ async function addLogProblem(req, res, next) {
     if (!Number.isInteger(cc) || cc < 0 || !Number.isInteger(fc) || fc < 0) {
       return res.status(400).json({ success: false, data: null, message: 'cleared_count·failed_count는 0 이상 정수' });
     }
-    const log = await ClimbLog.findByPk(logId, { attributes: ['id', 'user_id'] });
+    const log = await ClimbLog.findByPk(logId, { attributes: ['id', 'user_id', 'gym_id'] });
     if (!log) return res.status(404).json({ success: false, data: null, message: '기록 없음' });
     if (Number(log.user_id) !== Number(userId)) {
       return res.status(403).json({ success: false, data: null, message: '권한 없음' });
     }
+    const gymId = bodyGymId || log.gym_id;
+    let linkedProblemId = null;
+    if (sector_id && gymId) {
+      const problem = await Problem.create({
+        gym_id: gymId,
+        sector_id,
+        color: color || null,
+        level: level || null,
+        section: null,
+      });
+      linkedProblemId = problem.id;
+    }
     const cp = await ClimbLogProblem.create({
       log_id: log.id,
-      problem_id: null,
-      custom_color: color || null,
-      custom_level: level || null,
+      problem_id: linkedProblemId,
+      custom_color: linkedProblemId ? null : (color || null),
+      custom_level: linkedProblemId ? null : (level || null),
       is_cleared: cc > 0,
       attempts: 1,
       cleared_count: cc, failed_count: fc,
@@ -703,21 +738,27 @@ async function deleteLog(req, res, next) {
   }
 }
 
-// GET /api/climb-logs/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/climb-logs/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&gym_id=
 // 사용자별 기간 내 방문 일자 + 완등 항목(색상·V등급) 집계
 async function getSummary(req, res, next) {
   try {
     const userId = req.user.id;
-    const { from, to } = req.query;
+    const { from, to, gym_id, sector_id } = req.query;
     if (!from || !to) {
       return res.status(400).json({ success: false, message: 'from, to 파라미터가 필요합니다.', data: null });
     }
+    const summaryWhere = { user_id: userId, visited_at: { [Op.between]: [from, to] } };
+    if (gym_id) summaryWhere.gym_id = Number(gym_id);
     const logs = await ClimbLog.findAll({
-      where: { user_id: userId, visited_at: { [Op.between]: [from, to] } },
+      where: summaryWhere,
       include: [{
         model: ClimbLogProblem, as: 'problems',
         attributes: ['id', 'is_cleared', 'cleared_count', 'failed_count', 'attempts', 'custom_color', 'custom_level'],
-        include: [{ model: Problem, as: 'problem', attributes: ['color', 'level'] }],
+        include: [{
+          model: Problem, as: 'problem',
+          attributes: ['color', 'level', 'sector_id'],
+          include: [{ model: GymSector, as: 'sector', attributes: ['id', 'name'], required: false }],
+        }],
       }],
       order: [['visited_at', 'ASC']],
     });
@@ -726,10 +767,18 @@ async function getSummary(req, res, next) {
     const dates = [...new Set(logs.map((l) => l.visited_at))];
     const clearedByLevel = {};
     const clearedByColorLevel = {};
+    const sectorBreakdown = {};
     let totalCleared = 0;
     let totalFailed = 0;
+    let filteredVisits = 0;
     logs.forEach((l) => {
-      (l.problems || []).forEach((cp) => {
+      let problems = l.problems || [];
+      if (sector_id) {
+        problems = problems.filter(cp => cp.problem && Number(cp.problem.sector_id) === Number(sector_id));
+        if (problems.length === 0) return;
+      }
+      filteredVisits++;
+      problems.forEach((cp) => {
         const cleared = cp.cleared_count != null ? Number(cp.cleared_count) : (cp.is_cleared ? 1 : 0);
         const failed = cp.failed_count != null ? Number(cp.failed_count) : 0;
         if (cleared === 0 && failed === 0) return;
@@ -741,6 +790,14 @@ async function getSummary(req, res, next) {
         clearedByLevel[lv] = (clearedByLevel[lv] || 0) + cleared;
         const key = `${color}|${lv}`;
         clearedByColorLevel[key] = (clearedByColorLevel[key] || 0) + cleared;
+        if (!sector_id) {
+          const sId = cp.problem?.sector_id;
+          const sName = cp.problem?.sector?.name;
+          if (sId) {
+            if (!sectorBreakdown[sId]) sectorBreakdown[sId] = { id: sId, name: sName || `섹터 ${sId}`, count: 0 };
+            sectorBreakdown[sId].count += cleared;
+          }
+        }
       });
     });
 
@@ -782,7 +839,7 @@ async function getSummary(req, res, next) {
       });
     } catch {}
 
-    const visits = logs.length;
+    const visits = sector_id ? filteredVisits : logs.length;
 
     res.json({
       success: true,
@@ -794,6 +851,7 @@ async function getSummary(req, res, next) {
         cleared_by_level: clearedByLevel,
         breakdown,
         cleared_breakdown: breakdown,
+        sector_breakdown: Object.values(sectorBreakdown).sort((a, b) => b.count - a.count),
         training_by_category: trainingByCategory,
       },
       message: null,

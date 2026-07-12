@@ -29,6 +29,15 @@ async function tableExists(tableName) {
   return rows.length > 0;
 }
 
+async function fkExists(tableName, constraintName) {
+  const [rows] = await sequelize.query(
+    `SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
+       WHERE TABLE_SCHEMA = :db AND TABLE_NAME = :t AND CONSTRAINT_NAME = :c AND CONSTRAINT_TYPE = 'FOREIGN KEY'`,
+    { replacements: { db: DB_NAME, t: tableName, c: constraintName } }
+  );
+  return rows.length > 0;
+}
+
 async function addColumnIfMissing(table, column, ddl) {
   if (await columnExists(table, column)) return false;
   await sequelize.query(`ALTER TABLE \`${table}\` ADD COLUMN ${ddl}`);
@@ -40,6 +49,13 @@ async function createTableIfMissing(table, ddl) {
   if (await tableExists(table)) return false;
   await sequelize.query(ddl);
   console.log(`[setupDB] CREATE TABLE ${table}`);
+  return true;
+}
+
+async function addFkIfMissing(table, constraintName, ddl) {
+  if (await fkExists(table, constraintName)) return false;
+  await sequelize.query(`ALTER TABLE \`${table}\` ADD CONSTRAINT \`${constraintName}\` ${ddl}`);
+  console.log(`[setupDB] ALTER ${table} ADD FK ${constraintName}`);
   return true;
 }
 
@@ -180,6 +196,9 @@ async function ensureColumns() {
   await addColumnIfMissing('users', 'max_level_color', 'max_level_color VARCHAR(30) NULL');
   await addColumnIfMissing('users', 'max_level_grade', 'max_level_grade VARCHAR(20) NULL');
   await addColumnIfMissing('users', 'max_level_gym_id', 'max_level_gym_id BIGINT UNSIGNED NULL');
+
+  // problems — 섹터 연결
+  await addColumnIfMissing('problems', 'sector_id', 'sector_id BIGINT UNSIGNED NULL AFTER gym_id');
 }
 
 async function createTablesIfNeeded() {
@@ -358,6 +377,64 @@ async function createTablesIfNeeded() {
        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
      )`
   );
+
+  // 암장 섹터
+  await createTableIfMissing(
+    'gym_sectors',
+    `CREATE TABLE gym_sectors (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       gym_id BIGINT UNSIGNED NOT NULL,
+       name VARCHAR(100) NOT NULL,
+       sort_order SMALLINT UNSIGNED DEFAULT 0,
+       is_active BOOLEAN DEFAULT true,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       INDEX idx_gym_sectors_gym (gym_id),
+       FOREIGN KEY (gym_id) REFERENCES gyms(id) ON DELETE CASCADE
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  // 섹터별 문제 교체 날짜
+  await createTableIfMissing(
+    'gym_sector_resets',
+    `CREATE TABLE gym_sector_resets (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       gym_id BIGINT UNSIGNED NOT NULL,
+       sector_id BIGINT UNSIGNED NULL,
+       reset_date DATE NOT NULL,
+       note VARCHAR(200) NULL,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       INDEX idx_gym_resets_date (gym_id, reset_date),
+       FOREIGN KEY (gym_id) REFERENCES gyms(id) ON DELETE CASCADE,
+       FOREIGN KEY (sector_id) REFERENCES gym_sectors(id) ON DELETE SET NULL
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  // 섹터별 문제 교체 주기 스케줄
+  await createTableIfMissing(
+    'gym_sector_schedules',
+    `CREATE TABLE IF NOT EXISTS gym_sector_schedules (
+       id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+       gym_id BIGINT UNSIGNED NOT NULL,
+       sector_id BIGINT UNSIGNED NULL,
+       frequency ENUM('weekly','biweekly','monthly') NOT NULL,
+       day_of_week TINYINT NULL,
+       day_of_month TINYINT UNSIGNED NULL,
+       start_date DATE NULL,
+       note VARCHAR(200) NULL,
+       is_active BOOLEAN DEFAULT true,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       INDEX idx_gym_sched (gym_id, is_active),
+       FOREIGN KEY (gym_id) REFERENCES gyms(id) ON DELETE CASCADE,
+       FOREIGN KEY (sector_id) REFERENCES gym_sectors(id) ON DELETE SET NULL
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  );
+
+  // problems.sector_id FK (gym_sectors 테이블 생성 후 추가)
+  await addFkIfMissing(
+    'problems',
+    'fk_problems_sector_id',
+    'FOREIGN KEY (sector_id) REFERENCES gym_sectors(id) ON DELETE SET NULL'
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -519,6 +596,20 @@ async function seedPromptTemplate() {
   );
 }
 
+async function ensureScheduleFrequencyOnce() {
+  const [rows] = await sequelize.query(
+    `SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'gym_sector_schedules' AND COLUMN_NAME = 'frequency'`,
+    { replacements: { db: DB_NAME } }
+  );
+  const current = rows[0]?.t || '';
+  if (current.includes("'once'")) return;
+  await sequelize.query(
+    `ALTER TABLE gym_sector_schedules MODIFY COLUMN frequency ENUM('weekly','biweekly','monthly','once') NOT NULL`
+  );
+  console.log("[setupDB] gym_sector_schedules.frequency ENUM에 'once' 추가");
+}
+
 // ─────────────────────────────────────────────────────────────
 // Entry
 // ─────────────────────────────────────────────────────────────
@@ -537,8 +628,9 @@ async function setupDB() {
   await migrateClimbLogProblemVideos();
   await migratePersonalVideos();
   await seedPromptTemplate();
+  await ensureScheduleFrequencyOnce();
 
   console.log('[setupDB] 완료');
 }
 
-module.exports = { setupDB, columnExists, tableExists, addColumnIfMissing };
+module.exports = { setupDB, columnExists, tableExists, addColumnIfMissing, fkExists, addFkIfMissing };

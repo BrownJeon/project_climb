@@ -3,8 +3,8 @@ import { Btn, ColorBadge } from '../atoms';
 import { I } from '../atoms/Icons';
 import { climbLogsApi } from '../../api/climbLogs';
 import { trainingApi } from '../../api/training';
+import { gymSectorsApi } from '../../api/gymSectors';
 import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
-import { STYLE_KEYS, styleMeta } from '../../utils/style';
 import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '../TrainingItemFields';
 import TimeRangeField from '../TimeRangeField';
 import ProblemPhotoModal from './ProblemPhotoModal';
@@ -61,9 +61,10 @@ function problemToEntry(p) {
     _pendingDelete: false,
     _origCleared: Number(p.cleared_count != null ? p.cleared_count : (p.is_cleared ? 1 : 0)),
     _origFailed: Number(p.failed_count != null ? p.failed_count : 0),
-    _origStyle: p.style || '',
+    _origSectorId: p.sector_id || null,
     category: 'bouldering',
-    color: p.color || '', level: p.level || '', style: p.style || '',
+    color: p.color || '', level: p.level || '',
+    sector_id: p.sector_id || null,
     cleared_count: p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0),
     failed_count: p.failed_count != null ? Number(p.failed_count) : 0,
     ar_route_ids: [], ar_routes: [],
@@ -94,6 +95,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
   const [duration, setDuration] = useState(initial.duration_minutes ?? '');
   const [startTime, setStartTime] = useState(initial.start_time || '');
   const [endTime, setEndTime] = useState(initial.end_time || '');
+  const [sectors, setSectors] = useState([]);
   const [trainingRow, setTrainingRow] = useState(() =>
     kind === 'training_session'
       ? itemsToTrainingRow(initial.category, initial.items, initial.duration_minutes, initial.memo, initial.start_time, initial.end_time)
@@ -139,13 +141,18 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
     return () => window.removeEventListener('theroute:videoUploaded', handler);
   }, []);
 
+  useEffect(() => {
+    if (!initial.gym_id) return;
+    gymSectorsApi.list(initial.gym_id).then((r) => setSectors(r.data || [])).catch(() => {});
+  }, [initial.gym_id]);
+
   const updateEntry = (id, patch) => setEntries((p) => p.map((r) => r._id === id ? { ...r, ...patch } : r));
   const removeEntry = (id) => setEntries((p) => p.map((r) => r._id === id ? { ...r, _pendingDelete: true } : r).filter((r) => !(r._isNew && r._pendingDelete)));
   const addEntry = (category = 'bouldering') => setEntries((p) => [...p, {
     _id: `new-${Date.now()}-${Math.random()}`,
     _isNew: true, _pendingDelete: false,
     category,
-    color: '', level: '', style: '',
+    color: '', level: '', sector_id: null,
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
     personal_videos: [],
@@ -173,7 +180,8 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
             if (!e.color && !e.level) continue;
             const res = await climbLogsApi.addProblem(logId, {
               color: e.color || null, level: e.level || null,
-              style: e.style || null,
+              sector_id: e.sector_id || null,
+              gym_id: initial.gym_id || null,
               cleared_count: Number(e.cleared_count) || 0,
               failed_count: Number(e.failed_count) || 0,
               ar_route_ids: Array.isArray(e.ar_route_ids) ? e.ar_route_ids : [],
@@ -205,7 +213,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
             const updates = {};
             if (cc !== e._origCleared) updates.cleared_count = cc;
             if (fc !== e._origFailed) updates.failed_count = fc;
-            if ((e.style || '') !== (e._origStyle || '')) updates.style = e.style || null;
+            if ((e.sector_id || null) !== (e._origSectorId || null)) updates.sector_id = e.sector_id || null;
             // 영상은 별도 uploadProblemVideo로 관리하므로 제외
             if (Object.keys(updates).length) {
               await climbLogsApi.updateProblem(logId, e._existingProblemId, updates);
@@ -360,20 +368,16 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
                             자동 제목: {fmtRouteTitle(e.color, e.level)}
                           </div>
                         )}
-                        <div style={{ marginBottom: 10 }}>
-                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>벽 형태</div>
-                          <select value={e.style || ''} onChange={(ev) => updateEntry(e._id, { style: ev.target.value })}
-                            style={selectStyle}>
-                            <option value="">선택 안 함</option>
-                            <optgroup label="단일">
-                              {['slab','vertical','overhang','cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
-                            </optgroup>
-                            <optgroup label="복합">
-                              {['slab_vertical','vertical_overhang','slab_overhang','overhang_cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
-                            </optgroup>
-                            <option value="other">{styleMeta('other').label}</option>
-                          </select>
-                        </div>
+                        {sectors.length > 0 && (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>섹터</div>
+                            <select value={e.sector_id || ''} onChange={(ev) => updateEntry(e._id, { sector_id: ev.target.value ? Number(ev.target.value) : null })}
+                              style={selectStyle}>
+                              <option value="">섹터 선택 안 함</option>
+                              {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                        )}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                           <CountStepper
                             label="완등 (개)"

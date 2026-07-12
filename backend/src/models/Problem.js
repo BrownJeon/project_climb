@@ -11,6 +11,11 @@ const Problem = sequelize.define('Problem', {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: false,
   },
+  sector_id: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    comment: '섹터 (gym_sectors.id)',
+  },
   level: {
     type: DataTypes.STRING(20),
     allowNull: true,

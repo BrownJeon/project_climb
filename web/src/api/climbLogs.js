@@ -4,7 +4,7 @@ export const climbLogsApi = {
   monthDates: (year, month) => client.get('/climb-logs', { params: { year, month } }),
   visitedGyms: () => client.get('/climb-logs/visited-gyms'),
   visitedGymsWithDetail: (limit = 20) => client.get('/climb-logs/visited-gyms', { params: { include_gym: 'true', limit } }),
-  summary: (from, to) => client.get('/climb-logs/summary', { params: { from, to } }),
+  summary: (params = {}) => client.get('/climb-logs/summary', { params }),
   byDate: (date) => client.get('/climb-logs', { params: { date } }),
   byGym: (gymId, params = {}) => client.get('/climb-logs', { params: { gym_id: gymId, ...params } }),
   byRange: (from, to, params = {}) => client.get('/climb-logs', { params: { from, to, ...params } }),

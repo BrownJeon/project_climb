@@ -5,7 +5,7 @@
 const path = require('path');
 const {
   sequelize, ClimbLog, ClimbLogProblem, ArRoute, Problem, Gym, GymPass,
-  TrainingSession, TrainingSessionItem,
+  TrainingSession, TrainingSessionItem, GymSector,
 } = require('../models');
 const {
   validatePassXor, loadAndValidatePass, decrementCountPassIfNeeded,
@@ -113,11 +113,23 @@ async function createSession(req, res, next) {
 
       // 신규 문제 인라인 등록
       if (row.new_problem) {
+        // sector_id가 있으면 해당 암장의 섹터인지 검증
+        if (row.new_problem.sector_id) {
+          const sec = await GymSector.findOne({
+            where: { id: row.new_problem.sector_id, gym_id },
+            transaction: t,
+          });
+          if (!sec) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `attempts[${i}] sector_id가 해당 암장의 섹터가 아닙니다.`, data: null });
+          }
+        }
         const np = await Problem.create({
           gym_id,
           color: row.new_problem.color,
           level: row.new_problem.level,
-          section: row.new_problem.section || null,
+          section: row.new_problem.section_name || row.new_problem.section || null,
+          sector_id: row.new_problem.sector_id || null,
         }, { transaction: t });
         problemId = np.id;
         problemColor = np.color;

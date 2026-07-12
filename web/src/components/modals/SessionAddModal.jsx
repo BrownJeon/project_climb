@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Btn, ColorBadge, RadioOpt, Checkbox, Stepper, Pill } from '../atoms';
 import { I } from '../atoms/Icons';
 import { COLOR_KEYS, colorMeta, fmtRouteTitle } from '../../utils/colors';
-import { STYLE_KEYS, styleMeta } from '../../utils/style';
 import { gymsApi } from '../../api/gyms';
+import { gymSectorsApi } from '../../api/gymSectors';
 import { passesApi } from '../../api/passes';
 import { sessionsApi } from '../../api/sessions';
 import { climbLogsApi } from '../../api/climbLogs';
@@ -31,6 +31,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
   const [passId, setPassId] = useState('');
   const [periodPasses, setPeriodPasses] = useState([]);
   const [countPasses, setCountPasses] = useState([]);
+  const [sectors, setSectors] = useState([]);
 
   const [entries, setEntries] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -42,13 +43,15 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
   }, []);
 
   useEffect(() => {
-    if (!gymId) { setPeriodPasses([]); setCountPasses([]); return; }
+    if (!gymId) { setPeriodPasses([]); setCountPasses([]); setSectors([]); return; }
     Promise.all([
       passesApi.list({ gym_id: gymId, status: 'active', pass_type: 'period' }),
       passesApi.list({ gym_id: gymId, status: 'active', pass_type: 'count' }),
-    ]).then(([p, c]) => {
+      gymSectorsApi.list(gymId),
+    ]).then(([p, c, s]) => {
       setPeriodPasses(p.data?.passes || []);
       setCountPasses(c.data?.passes || []);
+      setSectors(s.data?.data || []);
     }).catch(() => {});
     setPassKind(''); setPassId('');
   }, [gymId]);
@@ -61,7 +64,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
     _id: Date.now() + Math.random(),
     category,
     // 볼더링
-    color: '', level: '', style: '',
+    color: '', level: '', sector_id: null,
     cleared_count: 0, failed_count: 0,
     ar_route_ids: [], ar_routes: [],
     pendingPhotos: [], // { file: File, preview: string }
@@ -99,8 +102,12 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
           attempts: 1,
           video_mode: 'none',
         };
-        if (a.color || a.level) row.new_problem = { color: a.color || null, level: a.level || null };
-        if (a.style) row.style = a.style;
+        if (a.color || a.level) row.new_problem = {
+          color: a.color || null,
+          level: a.level || null,
+          sector_id: a.sector_id || null,
+          section_name: sectors.find(s => s.id === a.sector_id)?.name || null,
+        };
         if (Array.isArray(a.ar_route_ids) && a.ar_route_ids.length) row.ar_route_ids = a.ar_route_ids;
         return row;
       }),
@@ -309,20 +316,19 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
                           </div>
                         )}
 
-                        <div style={{ marginBottom: 10 }}>
-                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>벽 형태</div>
-                          <select value={e.style || ''} onChange={(ev) => updateEntry(e._id, { style: ev.target.value })}
-                            style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}>
-                            <option value="">선택 안 함</option>
-                            <optgroup label="단일">
-                              {['slab','vertical','overhang','cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
-                            </optgroup>
-                            <optgroup label="복합">
-                              {['slab_vertical','vertical_overhang','slab_overhang','overhang_cave'].map((k) => <option key={k} value={k}>{styleMeta(k).label}</option>)}
-                            </optgroup>
-                            <option value="other">{styleMeta('other').label}</option>
-                          </select>
-                        </div>
+                        {sectors.length > 0 && (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>섹터</div>
+                            <select
+                              value={e.sector_id || ''}
+                              onChange={(ev) => updateEntry(e._id, { sector_id: ev.target.value ? Number(ev.target.value) : null })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}
+                            >
+                              <option value="">섹터 선택 안 함</option>
+                              {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                        )}
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                           <CountStepper

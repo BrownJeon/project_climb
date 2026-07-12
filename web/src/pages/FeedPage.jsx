@@ -82,7 +82,7 @@ export default function FeedPage() {
   }, [tab]);
 
   useEffect(() => {
-    climbLogsApi.summary(week.from, week.to)
+    climbLogsApi.summary({ from: week.from, to: week.to })
       .then((r) => setSummary(r.data || { visits: 0, dates: [], total_cleared: 0, cleared_breakdown: [], training_by_category: {} }))
       .catch(() => {});
     routineApi.list().then((r) => {

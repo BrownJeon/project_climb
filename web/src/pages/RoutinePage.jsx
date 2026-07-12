@@ -45,7 +45,7 @@ export default function RoutinePage() {
     routineApi.list().then((r) => setRoutines(r.data?.routines || [])).catch(() => {});
     const from = getMondayISO(), to = getSundayISO();
     trainingApi.sessions({ from, to }).then((r) => setWeekSessions(r.data?.sessions || [])).catch(() => {});
-    climbLogsApi.summary(from, to).then((r) => setWeekClimbs(r.data)).catch(() => {});
+    climbLogsApi.summary({ from, to }).then((r) => setWeekClimbs(r.data)).catch(() => {});
   }, [reloadTick]);
 
   async function handleDelete(id) {

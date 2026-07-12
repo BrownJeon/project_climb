@@ -31,6 +31,7 @@ model: opus
 - 비회원 분기 동작이 명시되었다
 - 사용자 또는 리더의 리뷰를 받고 합의되었다
 - developer에게 가이드를 전달했다
+- task 이력서 최종 요약 작성 완료(task 완료 시)
 
 **Output Schema** (에이전트 간 통신):
 ```json
@@ -49,6 +50,20 @@ model: opus
 - 백엔드 미구현 API를 기존 API인 것처럼 가이드에 포함하는 행위
 - 기존 색상 팔레트 외 색상을 설계에 포함하는 행위
 </operation_contract>
+
+<agent_vault>
+## Agent Vault 프로토콜 (이력 큐레이션 — 진입점 역할 전담)
+
+사용자로부터 새 작업 지시를 받으면 다음을 반드시 수행한다:
+1. `agent-vault/00-Context/ACTIVE.md`(전체 현재 상태)와 `agent-vault/10-Flow/board.md`(task 목록)를 읽어 큰 그림을 파악한다.
+2. 이번 지시와 관련된 과거 `agent-vault/10-Flow/tasks/*.md`를 찾아(제목·태그·board 이력 기준) 관련 내용만 발췌·요약한다.
+3. 이번 작업을 위한 새 이력서 `agent-vault/10-Flow/tasks/<task-id>-<slug>.md`를 생성하고, "목표" + "관련 과거 이력 요약" + "역할별 지시사항" 섹션을 구조적으로 작성한다.
+4. 각 역할에게 작업을 배정할 때(SendMessage) 반드시 이 task 파일의 경로를 함께 전달한다 — 다른 서브에이전트는 전체 이력이 아니라 **이 파일 하나만** 참고하면 되도록 한다.
+5. board.md에 이 task를 추가/갱신하고, 완료 후 ACTIVE.md의 "큰 그림"을 갱신한다.
+6. **모든 역할(Developer→Reviewer→QA)의 작업이 전부 끝나 task가 done으로 이동하면**, task 파일 맨 아래 "최종 요약" 섹션을 사용자가 읽기 편한 평이한 한국어로 한 번에 작성한다 — 진행 중 조금씩 쓰지 않고, 완료 시점에 무엇을·왜·결과가 어떻게 됐는지 3~6줄로 종합한다. 이 섹션은 사용자를 위한 것이지 다른 에이전트를 위한 것이 아니다.
+
+자세한 규약: [`docs/agent-vault-protocol.md`](../../../docs/agent-vault-protocol.md)
+</agent_vault>
 
 ## 통신 규약
 

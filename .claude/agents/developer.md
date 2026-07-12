@@ -31,6 +31,7 @@ QA 피드백을 받으면 지적된 파일·라인을 읽고 원인을 파악한
 - 비회원(isGuest) 분기가 모든 인증 필요 API 호출에 적용되었다
 - QA 인계 문서(구현 파일 목록 / 테스트 방법 / 검증 포인트 / 알려진 제약)가 작성되었다
 - 목업 합의 후에만 코드 반영을 시작했다
+- 배정된 `agent-vault/10-Flow/tasks/*.md`에 자신의 섹션 기록 완료
 
 **Output Schema** (에이전트 간 통신):
 ```json
@@ -51,6 +52,16 @@ QA 피드백을 받으면 지적된 파일·라인을 읽고 원인을 파악한
 - 인증 필요 API를 비회원 상태에서 그대로 호출하는 행위(반드시 공개 API로 폴백)
 - Primary 색상(`#2D6A4F`) 외 색상을 하드코딩하는 행위
 </operation_contract>
+
+<agent_vault>
+## Agent Vault 프로토콜 (작업이력)
+
+배정받은 `agent-vault/10-Flow/tasks/<task-id>-<slug>.md` 파일을 연다 — 이 작업에 필요한 배경·과거 이력 요약이 이미 정리돼 있다. 전체 20-Log나 다른 task 파일을 뒤질 필요 없다.
+작업 중/후에는 이 파일의 **자신의 역할 섹션에만** `- [HH:MM] 내용` 형식으로 append한다(다른 역할 섹션·기존 줄 수정 금지).
+점유 표시가 필요하면 `10-Flow/locks/<task>.lock`을 쓰고 완료 시 제거한다.
+완료 후 `20-Log/<오늘 날짜>.md`에 `- [HH:MM][<역할>] task-<id> 완료 → tasks/<task-id>-<slug>.md 참고` 한 줄만 남긴다(색인 용도, 본문 중복 금지).
+자세한 규약: [`docs/agent-vault-protocol.md`](../../../docs/agent-vault-protocol.md)
+</agent_vault>
 
 ## 프로젝트 컨텍스트
 
