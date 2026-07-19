@@ -106,7 +106,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
           color: a.color || null,
           level: a.level || null,
           sector_id: a.sector_id || null,
-          section_name: sectors.find(s => s.id === a.sector_id)?.name || null,
+          section_name: sectors.find(s => Number(s.id) === a.sector_id)?.name || null,
         };
         if (Array.isArray(a.ar_route_ids) && a.ar_route_ids.length) row.ar_route_ids = a.ar_route_ids;
         return row;

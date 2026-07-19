@@ -143,6 +143,11 @@ export default function LogDetailPage() {
                 {cleared === 0 && failed === 0 && (
                   <span className="tabnum" style={{ fontSize: 12, color: 'var(--ink-3)' }}>· {p.attempts || 1}회</span>
                 )}
+                {p.sector_name && (
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 'var(--r-pill)', border: '1px solid var(--line-2)' }}>
+                    {p.sector_name}
+                  </span>
+                )}
                 {processingVideos.length > 0 && (
                   <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
                     📹 처리 중 {processingVideos.length}개...

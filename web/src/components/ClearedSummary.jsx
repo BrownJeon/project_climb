@@ -28,11 +28,20 @@ export default function ClearedSummary({ problems = [], editable = false, onAdju
 
         return (
           <div key={p.id || i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {/* 1행: 배지 + 벽 형태 */}
+            {/* 1행: 배지 + 섹터 + 벽 형태 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', minWidth: 0 }}>
               <div style={{ flexShrink: 0 }}>
                 <ColorBadge color={p.color} level={p.level} size="sm" />
               </div>
+              {p.sector_name && (
+                <span style={{
+                  flexShrink: 0,
+                  fontSize: 10.5, fontWeight: 600,
+                  padding: '2px 6px', borderRadius: 'var(--r-pill)',
+                  background: 'var(--surface-2)', color: 'var(--ink-3)',
+                  border: '1px solid var(--line-2)', whiteSpace: 'nowrap',
+                }}>{p.sector_name}</span>
+              )}
               {p.style && (
                 <span style={{
                   flexShrink: 0,

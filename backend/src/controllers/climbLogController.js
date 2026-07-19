@@ -71,7 +71,12 @@ async function getLogsByDate(req, res, next) {
           model: ClimbLogProblem,
           as: 'problems',
           include: [
-            { model: Problem, as: 'problem', attributes: ['id', 'level', 'color', 'section'], required: false },
+            {
+              model: Problem, as: 'problem',
+              attributes: ['id', 'level', 'color', 'section', 'sector_id'],
+              include: [{ model: GymSector, as: 'sector', attributes: ['id', 'name'], required: false }],
+              required: false,
+            },
             { model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'video_url', 'thumbnail_url'], required: false },
             {
               model: require('../models').ClimbLogProblemVideo, as: 'video_links',
@@ -133,6 +138,8 @@ async function getLogsByDate(req, res, next) {
         cleared_count: p.cleared_count,
         failed_count: p.failed_count,
         style: p.style,
+        sector_id: p.problem?.sector_id || null,
+        sector_name: p.problem?.sector?.name || null,
         ar_route_id: p.ar_route_id,
         ar_route: p.ar_route ? p.ar_route.toJSON() : null,
         videos: (p.video_links || []).map((v) => ({
