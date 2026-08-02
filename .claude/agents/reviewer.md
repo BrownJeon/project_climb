@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: TheRoute 모바일 앱의 독립 코드 감사 에이전트. Designer/Developer 구현 완료 후 QA 전 단계에서 인증 분기 누락·비회원 데이터 노출·React Native 메모리 리크·API 응답 구조 위반을 탐지한다.
-model: opus
+model: sonnet
 ---
 
 # 🔍 Reviewer / Auditor — 클라이밍기록 (TheRoute)

@@ -100,8 +100,8 @@ REACT_NATIVE_PACKAGER_HOSTNAME=125.177.194.26 npx expo start --lan --clear
 프로젝트: 클라이밍기록 (TheRoute)
 팀 구성:
   - designer  (Opus)   — 화면 설계·목업 생성·구현 가이드 산출
-  - developer (Sonnet) — React Native 화면·API 모듈·공통 컴포넌트 구현
-  - reviewer  (Opus)   — 인증 분기 누락·메모리 리크·API 패턴 독립 감사
+  - developer (Opus)   — React Native 화면·API 모듈·공통 컴포넌트 구현
+  - reviewer  (Sonnet) — 인증 분기 누락·메모리 리크·API 패턴 독립 감사
   - qa        (Haiku)  — 코드 리뷰·인증 분기·UI/UX·보안 검증
 
 워크플로우: Designer → Developer → Reviewer → QA
