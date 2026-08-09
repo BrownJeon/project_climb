@@ -45,6 +45,7 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
   const [threshold, setThreshold] = useState(50);
   const [sampledColor, setSampledColor] = useState(null); // {r, g, b}
   const [lastClickClient, setLastClickClient] = useState(null); // {x, y} for re-detect on slider change
+  const [selectedBlobIdx, setSelectedBlobIdx] = useState(null);
 
   const imgWrapRef = useRef(null);
   const imgRef = useRef(null);  // <img> 요소 직접 참조 (detectHoldsByColor용)
@@ -112,8 +113,6 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
       setDetecting(false);
     }
   }
-
-  const [selectedBlobIdx, setSelectedBlobIdx] = useState(null);
 
   function setDetectedBlobRole(idx, role) {
     setDetectedBlobs(prev => prev.map((b, i) => i === idx ? { ...b, role } : b));
@@ -333,10 +332,14 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                         onMouseDown={(e) => e.stopPropagation()}
                         onTouchStart={(e) => e.stopPropagation()}
                         onClick={() => setSelectedBlobIdx(isSelected ? null : i)}>
-                        {/* 선택 표시 — 흰색 외곽 링 */}
+                        {/* 선택 표시 — 글로우 + 흰 점선 이중 링 */}
                         {isSelected && (
-                          <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r + 1.2}%`}
-                            fill="none" stroke="#fff" strokeWidth={2} strokeDasharray="4 3" opacity={0.85} />
+                          <>
+                            <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r + 1.8}%`}
+                              fill="none" stroke={strokeColor} strokeWidth={6} opacity={0.25} />
+                            <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r + 1.2}%`}
+                              fill="none" stroke="#fff" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.9} />
+                          </>
                         )}
                         <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r}%`}
                           fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 4 : 3}
