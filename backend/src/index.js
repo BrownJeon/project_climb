@@ -49,8 +49,9 @@ app.use('/api/geo', require('./routes/geo'));
 // SPA 정적 서빙 (Phase 11 — web/dist 존재 시 자동 활성)
 const distDir = path.join(__dirname, '../../web/dist');
 if (fs.existsSync(distDir)) {
-  app.use(express.static(distDir));
+  app.use(express.static(distDir, { index: false }));
   app.get(/^\/(?!api|uploads|health).*$/, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     res.sendFile(path.join(distDir, 'index.html'));
   });
 }
