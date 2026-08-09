@@ -6,6 +6,7 @@ import { I } from '../components/atoms/Icons';
 import { climbLogsApi } from '../api/climbLogs';
 import RecordEditModal from '../components/modals/RecordEditModal';
 import { failureTagLabel, parseFailureTags } from '../utils/failureTags';
+import { reviewTagLabel, reviewTagColor, parseReviewTags } from '../utils/reviewTags';
 import { fmtDuration, normalizeTime } from '../components/TimeRangeField';
 
 export default function LogDetailPage() {
@@ -294,7 +295,9 @@ function PhotoAnalysis({ photo }) {
     : (typeof photo.hold_annotations === 'string' ? (() => {
       try { return JSON.parse(photo.hold_annotations); } catch { return []; }
     })() : []);
-  const tags = parseFailureTags(photo.failure_tags);
+  const reviewTags = parseReviewTags(photo.review_tags);
+  const legacyTags = parseFailureTags(photo.failure_tags);
+  const hasReview = reviewTags.length > 0 || legacyTags.length > 0 || photo.failure_memo;
   return (
     <div style={{ borderTop: '1px solid var(--line)' }}>
       <div style={{ position: 'relative', background: '#000' }}>
@@ -305,7 +308,18 @@ function PhotoAnalysis({ photo }) {
             const stroke = a.color || '#ef4444';
             const sw = a.stroke || 3;
             if (a.type === 'circle') {
-              return <circle key={i} cx={`${a.x}%`} cy={`${a.y}%`} r={`${a.r}%`} fill="none" stroke={stroke} strokeWidth={sw} />;
+              return (
+                <g key={i}>
+                  <circle cx={`${a.x}%`} cy={`${a.y}%`} r={`${a.r}%`} fill="none" stroke={stroke} strokeWidth={sw} />
+                  {a.role && (
+                    <text x={`${a.x}%`} y={`${a.y}%`}
+                      textAnchor="middle" dominantBaseline="central"
+                      fill={a.role === 'start' ? '#22c55e' : '#3b82f6'} fontSize="3%" fontWeight="bold">
+                      {a.role === 'start' ? 'S' : 'T'}
+                    </text>
+                  )}
+                </g>
+              );
             }
             if (a.type === 'rect') {
               return <rect key={i} x={`${a.x}%`} y={`${a.y}%`} width={`${a.w}%`} height={`${a.h}%`} fill="none" stroke={stroke} strokeWidth={sw} />;
@@ -314,23 +328,45 @@ function PhotoAnalysis({ photo }) {
           })}
         </svg>
       </div>
-      {(tags.length > 0 || photo.failure_memo) && (
-        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {tags.length > 0 && (
+      {hasReview && (
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* 신규 review_tags — 색상 칩 */}
+          {reviewTags.length > 0 && (
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {tags.map((t) => (
+              {reviewTags.map((t) => (
                 <span key={t} style={{
                   fontSize: 11, fontWeight: 600,
                   padding: '3px 9px', borderRadius: 'var(--r-pill)',
-                  background: 'var(--surface-2)', color: 'var(--ink-2)',
-                  border: '1px solid var(--line-2)',
-                }}>{failureTagLabel(t)}</span>
+                  color: reviewTagColor(t),
+                  border: '1px solid ' + reviewTagColor(t),
+                  background: 'transparent',
+                }}>{reviewTagLabel(t)}</span>
               ))}
             </div>
           )}
+          {/* 레거시 failure_tags — 회색 칩 + "이전 분석" 소제목 */}
+          {legacyTags.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 4 }}>이전 분석</div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {legacyTags.map((t) => (
+                  <span key={t} style={{
+                    fontSize: 11, fontWeight: 600,
+                    padding: '3px 9px', borderRadius: 'var(--r-pill)',
+                    background: 'var(--surface-2)', color: 'var(--ink-3)',
+                    border: '1px solid var(--line-2)',
+                  }}>{failureTagLabel(t)}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* 메모 */}
           {photo.failure_memo && (
-            <div style={{ fontSize: 12.5, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
-              {photo.failure_memo}
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 2 }}>회고 메모</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
+                {photo.failure_memo}
+              </div>
             </div>
           )}
         </div>
