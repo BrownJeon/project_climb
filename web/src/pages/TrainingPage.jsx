@@ -435,6 +435,9 @@ function AnalysisTab() {
   const [page, setPage] = useState(0);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [reviewProblems, setReviewProblems] = useState([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const nav = useNavigate();
 
   function loadHistory(p = page) {
     trainingApi.analyses({ limit: ANALYSIS_PAGE_SIZE, offset: p * ANALYSIS_PAGE_SIZE })
@@ -445,6 +448,14 @@ function AnalysisTab() {
   }
 
   useEffect(() => { loadHistory(page); /* eslint-disable-next-line */ }, [page]);
+
+  useEffect(() => {
+    setReviewLoading(true);
+    climbLogsApi.listProblems({ has_review: 'true', limit: 10 })
+      .then((r) => setReviewProblems(r.data?.items || []))
+      .catch(() => {})
+      .finally(() => setReviewLoading(false));
+  }, []);
 
   async function openDetail(id) {
     setDetailLoading(true);
@@ -617,6 +628,56 @@ function AnalysisTab() {
             );
           })()}
         </>
+      )}
+
+      {/* 기억한 문제 */}
+      {(reviewLoading || reviewProblems.length > 0) && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 8 }}>
+            기억한 문제
+          </div>
+          {reviewLoading ? (
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', padding: '12px 0' }}>불러오는 중...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {reviewProblems.map((p) => (
+                <div key={p.id}
+                  role="button" tabIndex={0}
+                  onClick={() => nav(`/logs/${p.log_id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') nav(`/logs/${p.log_id}`); }}
+                  style={{
+                    background: 'var(--surface)', border: '1px solid var(--line)',
+                    borderRadius: 'var(--r-md)', padding: '10px 12px',
+                    display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'center',
+                  }}>
+                  {p.first_photo_url ? (
+                    <div style={{
+                      width: 48, height: 48, flexShrink: 0,
+                      borderRadius: 'var(--r-sm)',
+                      background: `#000 center/cover no-repeat url("${p.first_photo_url}")`,
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: 48, height: 48, flexShrink: 0,
+                      borderRadius: 'var(--r-sm)',
+                      background: `linear-gradient(135deg, ${colorMeta(p.color).dot}44, ${colorMeta(p.color).dot}99)`,
+                      display: 'grid', placeItems: 'center',
+                      color: 'rgba(255,255,255,.7)', fontSize: 16,
+                    }}>📍</div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
+                      {p.date ? p.date.slice(5) : ''} {p.gym_name || ''}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                      {colorMeta(p.color).kr} {p.level || ''}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {(detail || detailLoading) && (

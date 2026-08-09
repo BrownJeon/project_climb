@@ -30,6 +30,7 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
   const [color, setColor] = useState('');
   const [level, setLevel] = useState('');
   const [style, setStyle] = useState('');
+  const [hasReview, setHasReview] = useState(false);
   const [page, setPage] = useState(0);
 
   const [gyms, setGyms] = useState([]);
@@ -50,6 +51,7 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
       color: color || undefined,
       level: level || undefined,
       style: style || undefined,
+      has_review: hasReview ? 'true' : undefined,
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
     }).then((r) => {
@@ -59,7 +61,7 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
     }).catch(() => { if (!cancelled) { setItems([]); setTotal(0); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [range.from, range.to, gymId, color, level, style, page]);
+  }, [range.from, range.to, gymId, color, level, style, hasReview, page]);
 
   function selectRange(key, days) { setRange({ key, from: shiftDays(days), to: todayISO() }); setPage(0); }
 
@@ -83,6 +85,11 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
             <Chip key={k} active={range.key === k} onClick={() => selectRange(k, d)}>{l}</Chip>
           ))}
           <Chip active={range.key === 'custom'} onClick={() => setRange({ ...range, key: 'custom' })}>직접</Chip>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Chip active={hasReview} onClick={() => { setHasReview((v) => !v); setPage(0); }}>
+            📷 회고만 보기
+          </Chip>
         </div>
         {range.key === 'custom' && (
           <div style={{ display: 'flex', gap: 6 }}>
@@ -132,7 +139,7 @@ const [range, setRange] = useState({ key: '4w', from: shiftDays(-28), to: todayI
         {items.map((p) => {
           const cleared = p.cleared_count != null ? Number(p.cleared_count) : (p.is_cleared ? 1 : 0);
           const failed = p.failed_count != null ? Number(p.failed_count) : 0;
-          const thumb = p.thumbnail_url || p.videos?.[0]?.ar_route?.thumbnail_url;
+          const thumb = p.thumbnail_url || p.first_photo_url || p.videos?.[0]?.ar_route?.thumbnail_url;
           return (
             <div key={p.id} onClick={() => nav(`/logs/${p.log_id}`)}
               role="button" tabIndex={0}

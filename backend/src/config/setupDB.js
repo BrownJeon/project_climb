@@ -198,6 +198,9 @@ async function ensureColumns() {
   await addColumnIfMissing('users', 'max_level_gym_id', 'max_level_gym_id BIGINT UNSIGNED NULL');
   await addColumnIfMissing('users', 'password', 'password VARCHAR(255) NULL');
 
+  // climb_log_problem_photos — 리뷰 태그
+  await addColumnIfMissing('climb_log_problem_photos', 'review_tags', 'review_tags VARCHAR(500) NULL');
+
   // problems — 섹터 연결
   await addColumnIfMissing('problems', 'sector_id', 'sector_id BIGINT UNSIGNED NULL AFTER gym_id');
 }
