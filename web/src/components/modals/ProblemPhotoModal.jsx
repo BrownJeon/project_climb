@@ -111,14 +111,10 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
     }
   }
 
-  function cycleDetectedBlobRole(idx) {
-    setDetectedBlobs(prev => {
-      const cur = prev[idx].role;
-      if (cur === null) return prev.map((b, i) => i === idx ? { ...b, role: 'start' } : b);
-      if (cur === 'start') return prev.map((b, i) => i === idx ? { ...b, role: 'top' } : b);
-      // top → 제거
-      return prev.filter((_, i) => i !== idx);
-    });
+  const [selectedBlobIdx, setSelectedBlobIdx] = useState(null);
+
+  function setDetectedBlobRole(idx, role) {
+    setDetectedBlobs(prev => prev.map((b, i) => i === idx ? { ...b, role } : b));
   }
 
   function applyDetectedBlobs() {
@@ -129,6 +125,7 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
     setAnnotations(prev => [...prev, ...newAnnotations]);
     setDetectedBlobs([]);
     setSampledColor(null);
+    setSelectedBlobIdx(null);
   }
 
   function onDown(e) {
@@ -282,9 +279,9 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                 onTouchMove={(e) => { e.preventDefault(); onMove(e.touches[0]); }}
                 onTouchEnd={onUp}
                 style={{
-                  position: 'relative', width: '100%', maxHeight: '60vh',
+                  position: 'relative', width: '100%',
                   background: '#000', border: '1px solid var(--line)', borderRadius: 'var(--r-md)',
-                  overflow: 'hidden', cursor: tool === 'select' ? 'default' : 'crosshair',
+                  cursor: tool === 'select' ? 'default' : 'crosshair',
                   userSelect: 'none', touchAction: 'none',
                 }}>
                 <img ref={imgRef} src={previewUrl} alt="문제 사진"
@@ -322,13 +319,14 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                     const rh = (blob.maxY - blob.minY) / detectedCanvasSize.h * 100 / 2 * 1.25;
                     const r = Math.max(rw, rh);
                     const strokeColor = blob.role === 'start' ? '#22c55e' : blob.role === 'top' ? '#3b82f6' : '#f97316';
+                    const isSelected = selectedBlobIdx === i;
                     return (
                       <g key={i} style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                         onMouseDown={(e) => e.stopPropagation()}
                         onTouchStart={(e) => e.stopPropagation()}
-                        onClick={() => cycleDetectedBlobRole(i)}>
+                        onClick={() => setSelectedBlobIdx(isSelected ? null : i)}>
                         <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r}%`}
-                          fill="none" stroke={strokeColor} strokeWidth={3}
+                          fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 5 : 3}
                           strokeDasharray={blob.role ? 'none' : '6 3'} />
                         {blob.role && (
                           <text x={`${cx}%`} y={`${cy}%`}
@@ -342,6 +340,35 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                   })}
                 </svg>
               </div>
+
+              {/* 역할 선택 패널 — detect 모드 + blob 선택 시 */}
+              {tool === 'detect' && selectedBlobIdx != null && (
+                <div style={{
+                  display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+                  padding: '8px 12px', borderRadius: 'var(--r-md)',
+                  background: 'var(--surface-2)', border: '1px solid var(--line)',
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 4 }}>선택된 홀드 역할:</span>
+                  {[['start', '🟢 시작(S)', '#22c55e'], ['top', '🔵 종료(T)', '#3b82f6']].map(([role, label, c]) => {
+                    const active = detectedBlobs[selectedBlobIdx]?.role === role;
+                    return (
+                      <button key={role}
+                        onClick={() => setDetectedBlobRole(selectedBlobIdx, active ? null : role)}
+                        style={{
+                          padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                          borderRadius: 'var(--r-pill)',
+                          border: `1.5px solid ${active ? c : 'var(--line-2)'}`,
+                          background: active ? `${c}22` : 'var(--surface)',
+                          color: active ? c : 'var(--ink-2)',
+                        }}>{label}</button>
+                    );
+                  })}
+                  <button onClick={() => {
+                    setDetectedBlobs(prev => prev.filter((_, i) => i !== selectedBlobIdx));
+                    setSelectedBlobIdx(null);
+                  }} style={{ fontSize: 12, color: 'var(--ink-3)', padding: '6px 8px', background: 'none', border: 'none', cursor: 'pointer' }}>✕ 제거</button>
+                </div>
+              )}
 
               {/* 도구 모음 */}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -410,7 +437,7 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                         <span style={{ color: 'var(--ink-3)', minWidth: 24, textAlign: 'right' }}>{threshold}</span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                        {detectedBlobs.length}개 감지됨 · 탭: 일반→S(시작)→T(종료)→제거
+                        {detectedBlobs.length}개 감지됨 · 원을 탭해 선택 후 역할 지정
                       </div>
                       <button onClick={applyDetectedBlobs}
                         style={{
