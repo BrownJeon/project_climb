@@ -9,6 +9,7 @@ import PassAddModal from '../components/modals/PassAddModal';
 import PassEditModal from '../components/modals/PassEditModal';
 import VideoUploadModal from '../components/modals/VideoUploadModal';
 import { usersApi } from '../api/users';
+import { useAuth } from '../contexts/AuthContext';
 import { passesApi } from '../api/passes';
 import { formatTenure, formatDateKR } from '../utils/climbingTenure';
 import { VIDEO_QUALITY_PRESETS, getVideoQualityKey, setVideoQualityKey } from '../utils/videoQuality';
@@ -16,6 +17,7 @@ import { VIDEO_QUALITY_PRESETS, getVideoQualityKey, setVideoQualityKey } from '.
 const PAGE_LIMIT = 12;
 
 export default function MyPage() {
+  const { authLogout } = useAuth();
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('routes');
   const [routes, setRoutes] = useState([]);
@@ -275,6 +277,16 @@ export default function MyPage() {
       {/* 설정 섹션 */}
       <div style={{ padding: '14px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>설정</div>
+        <button
+          onClick={() => { if (confirm('로그아웃 하시겠습니까?')) authLogout(); }}
+          style={{
+            width: '100%', padding: '11px', marginBottom: 14,
+            fontSize: 14, fontWeight: 600, color: 'var(--danger)',
+            border: '1px solid var(--line-2)', borderRadius: 'var(--r-sm)',
+            background: 'var(--surface)', cursor: 'pointer',
+          }}>
+          로그아웃
+        </button>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>영상 업로드 화질</div>

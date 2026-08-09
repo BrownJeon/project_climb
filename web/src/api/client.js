@@ -1,10 +1,11 @@
 import axios from 'axios';
-import { getAuthToken } from '../hooks/useAuth';
+
+const TOKEN_KEY = 'theroute_token';
 
 export const client = axios.create({ baseURL: '/api' });
 
 client.interceptors.request.use((cfg) => {
-  const token = getAuthToken();
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
 });

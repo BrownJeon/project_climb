@@ -69,11 +69,11 @@ async function ensureSnsProviderEnum() {
     { replacements: { db: DB_NAME } }
   );
   const current = rows[0]?.t || '';
-  if (current.includes("'local'")) return;
+  if (current.includes("'github'")) return;
   await sequelize.query(
-    `ALTER TABLE users MODIFY COLUMN sns_provider ENUM('google','kakao','local') NULL`
+    `ALTER TABLE users MODIFY COLUMN sns_provider ENUM('google','kakao','local','github') NULL`
   );
-  console.log("[setupDB] users.sns_provider ENUM에 'local' 추가 + NULL 허용");
+  console.log("[setupDB] users.sns_provider ENUM에 'github'·'local' 추가 + NULL 허용");
 }
 
 async function seedDefaultUser() {
@@ -196,6 +196,7 @@ async function ensureColumns() {
   await addColumnIfMissing('users', 'max_level_color', 'max_level_color VARCHAR(30) NULL');
   await addColumnIfMissing('users', 'max_level_grade', 'max_level_grade VARCHAR(20) NULL');
   await addColumnIfMissing('users', 'max_level_gym_id', 'max_level_gym_id BIGINT UNSIGNED NULL');
+  await addColumnIfMissing('users', 'password', 'password VARCHAR(255) NULL');
 
   // problems — 섹터 연결
   await addColumnIfMissing('problems', 'sector_id', 'sector_id BIGINT UNSIGNED NULL AFTER gym_id');
@@ -596,6 +597,22 @@ async function seedPromptTemplate() {
   );
 }
 
+async function seedOwnerCredentials() {
+  const email = process.env.OWNER_EMAIL;
+  const password = process.env.OWNER_PASSWORD;
+  if (!email || !password) return;
+  const bcrypt = require('bcryptjs');
+  const hash = await bcrypt.hash(password, 10);
+  await sequelize.query(
+    `UPDATE users SET
+       email    = COALESCE(email, :email),
+       password = COALESCE(password, :hash)
+     WHERE id = 1`,
+    { replacements: { email: email.toLowerCase().trim(), hash } }
+  );
+  console.log('[setupDB] 오너 계정(id=1) 자격증명 설정 완료 (기존 값 우선)');
+}
+
 async function ensureScheduleFrequencyOnce() {
   const [rows] = await sequelize.query(
     `SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS
@@ -629,6 +646,7 @@ async function setupDB() {
   await migratePersonalVideos();
   await seedPromptTemplate();
   await ensureScheduleFrequencyOnce();
+  await seedOwnerCredentials();
 
   console.log('[setupDB] 완료');
 }
