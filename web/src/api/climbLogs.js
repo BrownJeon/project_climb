@@ -38,6 +38,7 @@ export const climbLogsApi = {
         ? extra.hold_annotations : JSON.stringify(extra.hold_annotations));
     if (extra.failure_tags != null) fd.append('failure_tags', extra.failure_tags);
     if (extra.failure_memo != null) fd.append('failure_memo', extra.failure_memo);
+    if (extra.review_tags != null) fd.append('review_tags', extra.review_tags);
     return client.post(`/climb-logs/${logId}/problems/${cpId}/photos`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
