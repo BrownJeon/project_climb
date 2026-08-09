@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 const { ClimbLog, ClimbLogProblem, Problem, Gym, GymPass, ArRoute, TrainingSession, TrainingSessionItem, ClimbLogProblemPhoto, ClimbLogProblemPersonalVideo, sequelize, GymSector } = require('../models');
 const { attachThumbnailAsync, attachThumbnailToClimbProblem } = require('../services/thumbnail');
 const { processPersonalVideoBackground } = require('../services/videoProcessor');
@@ -160,6 +160,7 @@ async function getLogsByDate(req, res, next) {
           hold_annotations: ph.hold_annotations,
           failure_tags: ph.failure_tags,
           failure_memo: ph.failure_memo,
+          review_tags: ph.review_tags,
         })),
       })),
     }));
@@ -273,6 +274,7 @@ async function getLogById(req, res, next) {
           hold_annotations: ph.hold_annotations,
           failure_tags: ph.failure_tags,
           failure_memo: ph.failure_memo,
+          review_tags: ph.review_tags,
         })),
       })),
     };
@@ -878,7 +880,7 @@ async function getSummary(req, res, next) {
 async function listLogProblems(req, res, next) {
   try {
     const userId = req.user.id;
-    const { from, to, gym_id, color, level, style } = req.query;
+    const { from, to, gym_id, color, level, style, has_review } = req.query;
     const limit = Math.min(Number(req.query.limit) || 30, 100);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
 
@@ -889,6 +891,12 @@ async function listLogProblems(req, res, next) {
       cpWhere[Op.and] = cpWhere[Op.and] ? [...cpWhere[Op.and], lvCond] : [lvCond];
     }
     if (style) cpWhere.style = style;
+    if (has_review === 'true') {
+      cpWhere[Op.and] = cpWhere[Op.and] || [];
+      cpWhere[Op.and].push(
+        literal(`EXISTS (SELECT 1 FROM climb_log_problem_photos ph WHERE ph.climb_log_problem_id = ClimbLogProblem.id AND (ph.review_tags IS NOT NULL OR ph.failure_tags IS NOT NULL OR ph.failure_memo IS NOT NULL))`)
+      );
+    }
 
     const climbLogWhere = { user_id: userId };
     if (from && to) climbLogWhere.visited_at = { [Op.between]: [from, to] };
@@ -924,7 +932,7 @@ async function listLogProblems(req, res, next) {
             model: require('../models').ClimbLogProblemVideo, as: 'video_links', required: false,
             include: [{ model: ArRoute, as: 'ar_route', attributes: ['id', 'title', 'thumbnail_url'], required: false }],
           },
-          { model: ClimbLogProblemPhoto, as: 'photos', required: false, attributes: ['id'] },
+          { model: ClimbLogProblemPhoto, as: 'photos', required: false, attributes: ['id', 'photo_url', 'review_tags', 'failure_tags', 'failure_memo'] },
           { model: ClimbLogProblemPersonalVideo, as: 'personal_videos', required: false, attributes: ['id', 'thumbnail_url', 'video_status'] },
         ],
       });
@@ -951,8 +959,10 @@ async function listLogProblems(req, res, next) {
         id: v.id, ar_route_id: v.ar_route_id,
         ar_route: v.ar_route ? v.ar_route.toJSON() : null,
       })),
+      first_photo_url: (p.photos || [])[0]?.photo_url || null,
       thumbnail_url: p.personal_videos?.[0]?.thumbnail_url || p.thumbnail_url || p.ar_route?.thumbnail_url || null,
       photo_count: (p.photos || []).length,
+      has_review: (p.photos || []).some((ph) => ph.review_tags || ph.failure_tags || ph.failure_memo),
     }));
 
     return res.json({
@@ -988,13 +998,14 @@ async function uploadProblemPhoto(req, res, next) {
       hold_annotations: req.body.hold_annotations || null,
       failure_tags: req.body.failure_tags || null,
       failure_memo: req.body.failure_memo || null,
+      review_tags: req.body.review_tags || null,
     });
     return res.status(201).json({
       success: true,
       data: {
         id: photo.id, photo_url: photo.photo_url,
         hold_annotations: photo.hold_annotations,
-        failure_tags: photo.failure_tags, failure_memo: photo.failure_memo,
+        failure_tags: photo.failure_tags, failure_memo: photo.failure_memo, review_tags: photo.review_tags,
       },
       message: '사진이 업로드되었습니다.',
     });
@@ -1026,6 +1037,7 @@ async function updateProblemPhoto(req, res, next) {
     if (req.body.hold_annotations !== undefined) updates.hold_annotations = req.body.hold_annotations;
     if (req.body.failure_tags !== undefined) updates.failure_tags = req.body.failure_tags || null;
     if (req.body.failure_memo !== undefined) updates.failure_memo = req.body.failure_memo || null;
+    if (req.body.review_tags !== undefined) updates.review_tags = req.body.review_tags || null;
     if (!Object.keys(updates).length)
       return res.status(400).json({ success: false, data: null, message: '수정할 항목이 없습니다.' });
     await photo.update(updates);
@@ -1034,7 +1046,7 @@ async function updateProblemPhoto(req, res, next) {
       data: {
         id: photo.id, photo_url: photo.photo_url,
         hold_annotations: photo.hold_annotations,
-        failure_tags: photo.failure_tags, failure_memo: photo.failure_memo,
+        failure_tags: photo.failure_tags, failure_memo: photo.failure_memo, review_tags: photo.review_tags,
       },
       message: '사진이 수정되었습니다.',
     });
