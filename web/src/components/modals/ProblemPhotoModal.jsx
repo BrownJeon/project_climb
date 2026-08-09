@@ -84,9 +84,10 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
     try {
       const imgRect = imgRef.current.getBoundingClientRect();
       const result = await detectHoldsByColor(imgRef.current, clickX, clickY, imgRect, threshold);
-      setDetectedBlobs(result.blobs);
+      setDetectedBlobs(result.blobs.map(b => ({ ...b, sizeScale: 1 })));
       setSampledColor(result.sampledColor);
       setDetectedCanvasSize({ w: result.canvasW, h: result.canvasH });
+      setSelectedBlobIdx(null);
     } catch (err) {
       console.warn('홀드 감지 실패:', err);
     } finally {
@@ -101,9 +102,10 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
     try {
       const imgRect = imgRef.current.getBoundingClientRect();
       const result = await detectHoldsByColor(imgRef.current, lastClickClient.x, lastClickClient.y, imgRect, newThreshold);
-      setDetectedBlobs(result.blobs);
+      setDetectedBlobs(result.blobs.map(b => ({ ...b, sizeScale: 1 })));
       setSampledColor(result.sampledColor);
       setDetectedCanvasSize({ w: result.canvasW, h: result.canvasH });
+      setSelectedBlobIdx(null);
     } catch (err) {
       console.warn('재감지 실패:', err);
     } finally {
@@ -115,6 +117,10 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
 
   function setDetectedBlobRole(idx, role) {
     setDetectedBlobs(prev => prev.map((b, i) => i === idx ? { ...b, role } : b));
+  }
+
+  function setBlobSizeScale(idx, scale) {
+    setDetectedBlobs(prev => prev.map((b, i) => i === idx ? { ...b, sizeScale: Math.max(0.3, Math.min(3.0, scale)) } : b));
   }
 
   function applyDetectedBlobs() {
@@ -315,9 +321,11 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                   {detectedBlobs.map((blob, i) => {
                     const cx = (blob.centerX / detectedCanvasSize.w) * 100;
                     const cy = (blob.centerY / detectedCanvasSize.h) * 100;
-                    const rw = (blob.maxX - blob.minX) / detectedCanvasSize.w * 100 / 2 * 1.25;
-                    const rh = (blob.maxY - blob.minY) / detectedCanvasSize.h * 100 / 2 * 1.25;
-                    const r = Math.max(rw, rh);
+                    const rBase = Math.max(
+                      (blob.maxX - blob.minX) / detectedCanvasSize.w * 100 / 2 * 1.25,
+                      (blob.maxY - blob.minY) / detectedCanvasSize.h * 100 / 2 * 1.25,
+                    );
+                    const r = rBase * (blob.sizeScale ?? 1);
                     const strokeColor = blob.role === 'start' ? '#22c55e' : blob.role === 'top' ? '#3b82f6' : '#f97316';
                     const isSelected = selectedBlobIdx === i;
                     return (
@@ -325,8 +333,13 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                         onMouseDown={(e) => e.stopPropagation()}
                         onTouchStart={(e) => e.stopPropagation()}
                         onClick={() => setSelectedBlobIdx(isSelected ? null : i)}>
+                        {/* 선택 표시 — 흰색 외곽 링 */}
+                        {isSelected && (
+                          <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r + 1.2}%`}
+                            fill="none" stroke="#fff" strokeWidth={2} strokeDasharray="4 3" opacity={0.85} />
+                        )}
                         <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r}%`}
-                          fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 5 : 3}
+                          fill="transparent" stroke={strokeColor} strokeWidth={isSelected ? 4 : 3}
                           strokeDasharray={blob.role ? 'none' : '6 3'} />
                         {blob.role && (
                           <text x={`${cx}%`} y={`${cy}%`}
@@ -342,33 +355,71 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
               </div>
 
               {/* 역할 선택 패널 — detect 모드 + blob 선택 시 */}
-              {tool === 'detect' && selectedBlobIdx != null && (
-                <div style={{
-                  display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
-                  padding: '8px 12px', borderRadius: 'var(--r-md)',
-                  background: 'var(--surface-2)', border: '1px solid var(--line)',
-                }}>
-                  <span style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 4 }}>선택된 홀드 역할:</span>
-                  {[['start', '🟢 시작(S)', '#22c55e'], ['top', '🔵 종료(T)', '#3b82f6']].map(([role, label, c]) => {
-                    const active = detectedBlobs[selectedBlobIdx]?.role === role;
-                    return (
-                      <button key={role}
-                        onClick={() => setDetectedBlobRole(selectedBlobIdx, active ? null : role)}
-                        style={{
-                          padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                          borderRadius: 'var(--r-pill)',
-                          border: `1.5px solid ${active ? c : 'var(--line-2)'}`,
-                          background: active ? `${c}22` : 'var(--surface)',
-                          color: active ? c : 'var(--ink-2)',
-                        }}>{label}</button>
-                    );
-                  })}
-                  <button onClick={() => {
-                    setDetectedBlobs(prev => prev.filter((_, i) => i !== selectedBlobIdx));
-                    setSelectedBlobIdx(null);
-                  }} style={{ fontSize: 12, color: 'var(--ink-3)', padding: '6px 8px', background: 'none', border: 'none', cursor: 'pointer' }}>✕ 제거</button>
-                </div>
-              )}
+              {tool === 'detect' && selectedBlobIdx != null && (() => {
+                const selBlob = detectedBlobs[selectedBlobIdx];
+                if (!selBlob) return null;
+                const curScale = selBlob.sizeScale ?? 1;
+                return (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                    padding: '10px 12px', borderRadius: 'var(--r-md)',
+                    background: 'var(--surface-2)', border: '2px solid var(--primary)',
+                  }}>
+                    {/* 헤더: 선택 표시 + 제거 */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>
+                        ● 홀드 #{selectedBlobIdx + 1} 선택됨
+                      </span>
+                      <button onClick={() => {
+                        setDetectedBlobs(prev => prev.filter((_, i) => i !== selectedBlobIdx));
+                        setSelectedBlobIdx(null);
+                      }} style={{ fontSize: 12, color: 'var(--ink-3)', padding: '2px 6px', background: 'none', border: '1px solid var(--line-2)', borderRadius: 'var(--r-pill)', cursor: 'pointer' }}>
+                        ✕ 제거
+                      </button>
+                    </div>
+                    {/* 역할 버튼 */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[['start', '🟢 시작(S)', '#22c55e'], ['top', '🔵 종료(T)', '#3b82f6']].map(([role, label, c]) => {
+                        const active = selBlob.role === role;
+                        return (
+                          <button key={role}
+                            onClick={() => setDetectedBlobRole(selectedBlobIdx, active ? null : role)}
+                            style={{
+                              flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 600,
+                              borderRadius: 'var(--r-pill)',
+                              border: `1.5px solid ${active ? c : 'var(--line-2)'}`,
+                              background: active ? `${c}22` : 'var(--surface)',
+                              color: active ? c : 'var(--ink-2)',
+                            }}>{label}</button>
+                        );
+                      })}
+                    </div>
+                    {/* 크기 슬라이더 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 11, color: 'var(--ink-3)', minWidth: 28 }}>크기</span>
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={() => setBlobSizeScale(selectedBlobIdx, curScale - 0.15)}
+                        style={{ width: 28, height: 28, fontSize: 16, lineHeight: 1, borderRadius: '50%', border: '1px solid var(--line-2)', background: 'var(--surface)', cursor: 'pointer', flexShrink: 0 }}>−</button>
+                      <input type="range" min={0.3} max={3.0} step={0.05}
+                        value={curScale}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onChange={(e) => setBlobSizeScale(selectedBlobIdx, Number(e.target.value))}
+                        style={{ flex: 1 }} />
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={() => setBlobSizeScale(selectedBlobIdx, curScale + 0.15)}
+                        style={{ width: 28, height: 28, fontSize: 16, lineHeight: 1, borderRadius: '50%', border: '1px solid var(--line-2)', background: 'var(--surface)', cursor: 'pointer', flexShrink: 0 }}>+</button>
+                      <span style={{ fontSize: 11, color: 'var(--ink-3)', minWidth: 32, textAlign: 'right' }}>
+                        {Math.round(curScale * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 도구 모음 */}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
