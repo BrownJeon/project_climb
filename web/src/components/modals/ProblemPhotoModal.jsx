@@ -346,7 +346,7 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
               {/* 도구 모음 */}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 {[['circle', '◯ 원'], ['rect', '▭ 사각'], ['select', '🗑 선택삭제'], ['detect', '🎨 색상 감지']].map(([k, l]) => (
-                  <button key={k} onClick={() => setTool(k)}
+                  <button key={k} onClick={() => { setTool(k); if (k !== 'detect') setDetectedBlobs([]); }}
                     style={{
                       padding: '6px 10px', fontSize: 12, fontWeight: 600,
                       borderRadius: 'var(--r-pill)',
