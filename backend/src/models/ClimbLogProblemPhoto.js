@@ -19,6 +19,7 @@ const ClimbLogProblemPhoto = sequelize.define('ClimbLogProblemPhoto', {
   },
   failure_tags: { type: DataTypes.STRING(255), allowNull: true },
   failure_memo: { type: DataTypes.TEXT, allowNull: true },
+  review_tags: { type: DataTypes.STRING(500), allowNull: true },
   created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
 }, {
   tableName: 'climb_log_problem_photos',
