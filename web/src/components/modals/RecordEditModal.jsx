@@ -497,12 +497,12 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
                                     background: `#000 center/cover no-repeat url("${ph.photo_url}")`,
                                     cursor: 'pointer', position: 'relative',
                                   }}>
-                                  {(ph.failure_tags || ph.failure_memo) && (
+                                  {(ph.review_tags || ph.failure_tags || ph.failure_memo) && (
                                     <span style={{
                                       position: 'absolute', bottom: 2, right: 2,
                                       fontSize: 9, padding: '1px 4px', borderRadius: 'var(--r-pill)',
-                                      background: 'var(--danger)', color: '#fff', fontWeight: 700,
-                                    }}>분석</span>
+                                      background: 'var(--primary)', color: 'var(--primary-fg, #fff)', fontWeight: 700,
+                                    }}>회고</span>
                                   )}
                                 </button>
                               ))}
@@ -514,7 +514,7 @@ export default function RecordEditModal({ kind, logId, initial, onSubmit, onClos
                                   borderRadius: 'var(--r-sm)',
                                   border: '1px dashed var(--line-2)', background: 'var(--surface)',
                                   cursor: 'pointer',
-                                }}>+ 사진</button>
+                                }}>+ 회고</button>
                             </div>
                           </div>
                         )}
