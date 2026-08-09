@@ -324,6 +324,8 @@ export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDelet
                     const strokeColor = blob.role === 'start' ? '#22c55e' : blob.role === 'top' ? '#3b82f6' : '#f97316';
                     return (
                       <g key={i} style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={() => cycleDetectedBlobRole(i)}>
                         <circle cx={`${cx}%`} cy={`${cy}%`} r={`${r}%`}
                           fill="none" stroke={strokeColor} strokeWidth={3}
