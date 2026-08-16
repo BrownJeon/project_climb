@@ -13,11 +13,12 @@ tags:
 - 기록 모달 "벽 형태" → 섹터 선택 교체 → Done ([[T001-sector-record-edit]])
 - 섹터 이름 배지를 요약·상세 화면에 노출 → Done ([[T002-sector-summary-display]])
 
-**문제 회고 라인 (8월) — 완료, 검증 미흡**
+**문제 회고 라인 (8월) — 완료, 검증까지 통과**
 - `review_tags` 2그룹 태그(기억에 남은 이유 / 다음에 고칠 점) + legacy 폴백 → Done
 - Canvas 기반 홀드 색상 자동 감지(`holdDetection.js`) → Done
 - `has_review` 필터 · 훈련 페이지 "기억한 문제" 섹션 → Done ([[T003-problem-review-tags]])
-- ⚠️ 머지 후 blob 상호작용 버그 수정 4건 연속 — 실기 검증 필요
+- ✅ 머지 후 버그 수정 4건이 연속됐던 blob 상호작용을 **운영에서 실기 검증 — 결함 0건** ([[T006-blob-edit-verification]])
+  - 홀드 감지는 **1초 롱프레스** 인터랙션. blob 좌표는 퍼센트 정규화(0–100), SVG에 viewBox 없음
 
 **웹 인증 라인 (8월) — 완료, 회귀 있음**
 - 이메일 가입/로그인 + Google·GitHub OAuth(공용 패키지 `@workspace/auth-oauth`) → Done ([[T004-auth-flow]])
@@ -38,8 +39,15 @@ tags:
 
 우선순위 순 — 상세는 [[board]] Todo 참조.
 
-1. 홀드 감지 blob 편집 실기 검증 (QA) — 브라우저 검증 가능 확인됨 (vhost→127.0.0.1:3100 프록시, `web/dist` 존재)
-2. `JWT_SECRET` 하드코딩 폴백 제거 + fail-fast — **우선순위 낮음**. `backend/.env`에 이미 설정돼 있어 실질 위험 없음. 다만 세 파일(`routes/auth.js`·`authController.js`는 폴백 有, `middleware/auth.js`는 폴백 無)의 처리가 불일치해 env 누락 시 인증이 전부 깨지는 구조.
+1. `JWT_SECRET` 처리 일원화 + fail-fast — **우선순위 낮음**. `backend/.env`에 이미 설정돼 있어 실질 위험 없음. 다만 세 파일(`routes/auth.js`·`authController.js`는 폴백 有, `middleware/auth.js`는 폴백 無)의 처리가 불일치해 env 누락 시 인증이 전부 깨지는 구조.
+
+> 급한 과제가 사실상 비었다. 다음 세션은 새 기능 방향을 사용자와 정하는 것부터 시작하는 게 맞다.
+
+## 검증 환경 메모 (재사용)
+
+- 운영 웹 검증 가능: vhost → `127.0.0.1:3100` 프록시, `web/dist` 존재, Chrome DevTools MCP로 조작
+- **자동화 브라우저는 사용자 로그인 세션과 분리**되어 있다. 두 계정 모두 `password` NULL이라 폼 로그인 불가 → 앱 `JWT_SECRET`으로 단기 토큰을 발급해 `localStorage.theroute_token`에 주입하는 방식으로 진입 (사용자 승인 필요, 권한 분류기가 기본 차단함)
+- 운영 데이터를 건드리는 검증은 **착수 직전 백업을 별도로** 남길 것 ([[T006-blob-edit-verification]]의 사고 참조)
 
 ## 열린 결정
 
