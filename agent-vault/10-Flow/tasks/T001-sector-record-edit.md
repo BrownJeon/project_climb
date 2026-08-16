@@ -1,14 +1,16 @@
 ---
-id: T001
+task_id: T001
+title: 섹터 선택 + 기록 수정 모달 개선
 slug: sector-record-edit
 project: TheRoute
-status: Done
+status: done
+roles_involved: developer
 created: 2026-07-12
 updated: 2026-07-12
 tags:
   - type/task
-  - area/gym-management
-  - area/record
+  - domain/gym-management
+  - domain/record
 ---
 
 # T001 · 섹터 선택 + 기록 수정 모달 개선
