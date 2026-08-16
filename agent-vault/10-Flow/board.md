@@ -12,6 +12,9 @@ tags:
 - `ProblemPhotoModal.jsx`(786줄) 컴포넌트 분해 — blob 편집·회고 태그·업로드 혼재. 기능은 정상 확인됨([[T006-blob-edit-verification]])이므로 순수 구조 개선 과제 ([[T003-problem-review-tags]])
 - 저장 데이터에 내부 플래그 `_detected: true`가 DB에 영속화됨 — 의도 확인 필요 ([[T006-blob-edit-verification]])
 - 이메일/비밀번호 로그인 사용 불가 — 두 계정 모두 `password` NULL, `seedOwnerCredentials()` 미실행. 사용 계획 시 `OWNER_EMAIL`/`OWNER_PASSWORD` 설정 필요 ([[T004-auth-flow]])
+- **`project_climb` 자동배포 미작동** — `~/.local/webhook-deploy/server.js:16`에 `deploy-climb.sh`가 등록돼 있으나 webhook 로그에 `project_climb` 실행 이력이 **한 번도 없음** (2026-08-16 main 푸시에도 미반응). Gitea 저장소 쪽 훅이 미연결/비활성인 것으로 추정.
+  - **현재는 무해**: pm2가 배포본이 아니라 작업 디렉터리(`.../project/TheRoute/backend`)를 직접 실행하므로 배포 없이도 최신 코드가 동작함
+  - **고쳐야 할 시점**: 다른 기기·타인이 푸시하는 상황이 생기면 서버에 반영되지 않음 (수동 `git pull` + `pm2 restart` 필요)
 
 ## Todo
 
