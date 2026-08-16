@@ -8,7 +8,7 @@ const User = sequelize.define('User', {
     autoIncrement: true,
   },
   sns_provider: {
-    type: DataTypes.ENUM('google', 'kakao', 'local', 'github'),
+    type: DataTypes.ENUM('google', 'local', 'github'),
     allowNull: true,   // 1인용 디폴트 사용자 등 SNS 미연동 케이스 허용
   },
   sns_id: {

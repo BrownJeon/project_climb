@@ -9,56 +9,12 @@ import useAuthStore from '../store/authStore';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const KAKAO_REST_API_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY;
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((s) => s.login);
   const loginAsGuest = useAuthStore((s) => s.loginAsGuest);
-
-  // ────────────────────────────────────────
-  // 카카오 로그인
-  // ────────────────────────────────────────
-  const handleKakaoLogin = async () => {
-    if (!KAKAO_REST_API_KEY) {
-      Alert.alert('설정 오류', '.env에 EXPO_PUBLIC_KAKAO_REST_API_KEY를 설정해주세요.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const redirectUri = AuthSession.makeRedirectUri({ scheme: 'theroute' });
-      const authUrl =
-        `https://kauth.kakao.com/oauth/authorize` +
-        `?client_id=${KAKAO_REST_API_KEY}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=code`;
-
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-      if (result.type !== 'success') return;
-
-      const code = new URL(result.url).searchParams.get('code');
-      const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: KAKAO_REST_API_KEY,
-          redirect_uri: redirectUri,
-          code,
-        }).toString(),
-      });
-      const tokenData = await tokenRes.json();
-      if (!tokenData.access_token) throw new Error('카카오 토큰 발급 실패');
-
-      await login('kakao', tokenData.access_token);
-    } catch (err) {
-      Alert.alert('로그인 실패', err.message || '카카오 로그인 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // ────────────────────────────────────────
   // 구글 로그인
@@ -111,14 +67,6 @@ export default function LoginScreen() {
 
       <View style={styles.buttons}>
         <TouchableOpacity
-          style={[styles.btn, styles.kakaoBtn]}
-          onPress={handleKakaoLogin}
-          disabled={loading}
-        >
-          <Text style={styles.kakaoBtnText}>카카오로 로그인</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={[styles.btn, styles.googleBtn]}
           onPress={handleGoogleLogin}
           disabled={loading}
@@ -157,8 +105,6 @@ const styles = StyleSheet.create({
   tagline: { fontSize: 15, color: '#666', textAlign: 'center' },
   buttons: { paddingHorizontal: 32, gap: 14 },
   btn: { height: 52, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  kakaoBtn: { backgroundColor: '#FEE500' },
-  kakaoBtnText: { fontSize: 16, fontWeight: '600', color: '#191919' },
   googleBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd' },
   googleBtnText: { fontSize: 16, fontWeight: '600', color: '#333' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },

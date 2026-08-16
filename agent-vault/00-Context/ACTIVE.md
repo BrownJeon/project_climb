@@ -23,6 +23,10 @@ tags:
 - 이메일 가입/로그인 + Google·GitHub OAuth(공용 패키지 `@workspace/auth-oauth`) → Done ([[T004-auth-flow]])
 - ⚠️ **모바일 SNS 로그인 파손** — `POST /auth/sns` 제거됨, 모바일은 계속 호출 중
 
+**카카오 로그인 제거 (8/16) — 완료**
+- 사용자 결정: 카카오 로그인은 구현하지 않고 **제거**. `sns_provider` ENUM에서 `kakao` 삭제, 모바일 로그인 버튼·`getKakaoProfile` 제거 → Done ([[T005-remove-kakao-login]])
+- ⚠️ **카카오 지도 API(`KAKAO_REST_API_KEY`)는 유지** — 암장 위치 검색 실사용. 향후 "카카오 제거" 작업 시 반드시 구분할 것
+
 **인프라**
 - nginx vhost `climb.xn--lh0b87pnudm10a4vd.com.conf` 활성 확인 (2026-08-16) — 기존 "다음 할 일" 항목이었으나 이미 완료 상태였음
 
@@ -34,9 +38,8 @@ tags:
 
 우선순위 순 — 상세는 [[board]] Todo 참조.
 
-1. **[높음] 카카오 로그인 경로 확보** — 기획서상 주요 로그인 수단인데 웹에도 없음 (웹 우선 방침에서도 유효)
-2. 홀드 감지 blob 편집 실기 검증 (QA)
-3. `JWT_SECRET` 하드코딩 폴백 제거 + fail-fast
+1. 홀드 감지 blob 편집 실기 검증 (QA) — 브라우저 검증 가능 확인됨 (vhost→127.0.0.1:3100 프록시, `web/dist` 존재)
+2. `JWT_SECRET` 하드코딩 폴백 제거 + fail-fast — **우선순위 낮음**. `backend/.env`에 이미 설정돼 있어 실질 위험 없음. 다만 세 파일(`routes/auth.js`·`authController.js`는 폴백 有, `middleware/auth.js`는 폴백 無)의 처리가 불일치해 env 누락 시 인증이 전부 깨지는 구조.
 
 ## 열린 결정
 

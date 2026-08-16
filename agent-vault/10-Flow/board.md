@@ -14,7 +14,6 @@ tags:
 
 ## Todo
 
-- **[높음] 카카오 로그인 경로 부재** — `sns_provider` ENUM엔 있으나 공급자 미구성. 웹에도 없으므로 **웹 우선 방침에서도 유효한 과제** ([[T004-auth-flow]])
 - 홀드 감지 blob 편집 실기 검증 — 머지 후 버그 수정 4건 연속, 회귀 테스트 없음 ([[T003-problem-review-tags]])
 
 ## Doing
@@ -23,6 +22,7 @@ tags:
 
 ## Done
 
+- [[T005-remove-kakao-login]] · 카카오 로그인 제거 (지도 API는 유지) (2026-08-16)
 - [[T004-auth-flow]] · 웹 인증 플로우 (이메일/비밀번호 + OAuth) (2026-08-09)
 - [[T003-problem-review-tags]] · 문제 회고(review_tags) + 홀드 색상 자동 감지 (2026-08-09)
 - [[T002-sector-summary-display]] · 섹터 정보 요약·상세 화면 노출 (2026-07-19)

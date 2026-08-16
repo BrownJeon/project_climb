@@ -14,7 +14,7 @@
 | 백엔드 | Node.js + Express |
 | 데이터베이스 | MariaDB (Synology NAS) |
 | AR | ViroReact / expo-camera + canvas overlay |
-| 인증 | JWT + SNS OAuth (Google, Kakao) |
+| 인증 | JWT + SNS OAuth (Google, GitHub) |
 | 미디어 저장 | AWS S3 or NAS 로컬 스토리지 |
 
 ## 디렉토리 구조

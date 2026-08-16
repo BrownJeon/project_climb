@@ -64,16 +64,26 @@ async function addFkIfMissing(table, constraintName, ddl) {
 // ─────────────────────────────────────────────────────────────
 async function ensureSnsProviderEnum() {
   const [rows] = await sequelize.query(
-    `SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS
+    `SELECT COLUMN_TYPE AS t, IS_NULLABLE AS n FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'users' AND COLUMN_NAME = 'sns_provider'`,
     { replacements: { db: DB_NAME } }
   );
   const current = rows[0]?.t || '';
-  if (current.includes("'github'")) return;
+  const nullable = rows[0]?.n === 'YES';
+  // 목표 상태: ENUM('google','local','github') NULL — 카카오 로그인 제거
+  // 가드는 "목표 상태와 일치하면 skip"으로 판정한다. 특정 값 하나(예: 'github') 유무로
+  // 판정하면 이후 ENUM을 바꿔도 early return에 걸려 마이그레이션이 실행되지 않는다.
+  const isTarget =
+    current.includes("'google'") &&
+    current.includes("'local'") &&
+    current.includes("'github'") &&
+    !current.includes("'kakao'") &&
+    nullable;
+  if (isTarget) return;
   await sequelize.query(
-    `ALTER TABLE users MODIFY COLUMN sns_provider ENUM('google','kakao','local','github') NULL`
+    `ALTER TABLE users MODIFY COLUMN sns_provider ENUM('google','local','github') NULL`
   );
-  console.log("[setupDB] users.sns_provider ENUM에 'github'·'local' 추가 + NULL 허용");
+  console.log("[setupDB] users.sns_provider ENUM → ('google','local','github') NULL ('kakao' 제거)");
 }
 
 async function seedDefaultUser() {

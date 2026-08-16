@@ -10,7 +10,7 @@
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | id | BIGINT PK | 사용자 ID |
-| sns_provider | ENUM('google','kakao') | SNS 제공자 |
+| sns_provider | ENUM('google','local','github') | SNS 제공자 (NULL 허용) |
 | sns_id | VARCHAR(255) | SNS 고유 ID |
 | email | VARCHAR(255) | 이메일 |
 | nickname | VARCHAR(50) | 닉네임 |
