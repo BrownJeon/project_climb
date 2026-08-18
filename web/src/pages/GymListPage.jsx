@@ -4,11 +4,10 @@ import TopBar from '../components/TopBar';
 import { Chip, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import GymAddModal from '../components/modals/GymAddModal';
+import GymCard from '../components/GymCard';
 import { gymsApi } from '../api/gyms';
 import { usersApi } from '../api/users';
 import { climbLogsApi } from '../api/climbLogs';
-import { colorMeta } from '../utils/colors';
-import { formatDateKR } from '../utils/climbingTenure';
 
 export default function GymListPage() {
   const nav = useNavigate();
@@ -179,89 +178,13 @@ export default function GymListPage() {
 
       <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {gyms.map((g) => (
-          <div
+          <GymCard
             key={g.id}
+            gym={g}
             onClick={() => nav(`/gyms/${g.id}`)}
-            style={{
-              background: 'var(--surface)', border: '1px solid var(--line)',
-              borderRadius: 'var(--r-md)', padding: '14px 14px 12px',
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              {g.thumbnail_url && (
-                <div style={{
-                  width: 64, aspectRatio: '9 / 13', flexShrink: 0,
-                  borderRadius: 'var(--r-sm)', overflow: 'hidden',
-                  background: `#000 center/cover no-repeat url("${g.thumbnail_url}")`,
-                  border: '1px solid var(--line)',
-                }} />
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700 }}>{g.name}</span>
-                  {/* TODO: 주 암장 판정은 user.main_gyms 기반 */}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {g.address}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--ink-3)' }}>
-                  {g.hours && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      {I.clock(11)} <span>{typeof g.hours === 'string' ? g.hours : '영업시간'}</span>
-                    </span>
-                  )}
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    {I.film(11)} <span className="tabnum">{g.route_count ?? 0}</span>
-                  </span>
-                  {g.last_visited_at && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--ink-2)' }}>
-                      {I.cal(11)} <span>최근 방문 {formatDateKR(g.last_visited_at)}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => setEditTarget(g)}
-                  style={{
-                    fontSize: 11, fontWeight: 600, color: 'var(--ink-2)',
-                    padding: '4px 8px', borderRadius: 'var(--r-pill)',
-                    border: '1px solid var(--line-2)', background: 'var(--surface)',
-                  }}>수정</button>
-                <button onClick={() => handleDelete(g)}
-                  style={{
-                    fontSize: 11, fontWeight: 600, color: 'var(--danger)',
-                    padding: '4px 8px', borderRadius: 'var(--r-pill)',
-                    border: '1px solid var(--line-2)', background: 'var(--surface)',
-                  }}>삭제</button>
-              </div>
-              <span style={{ color: 'var(--ink-4)', marginTop: 2 }}>{I.chev(14)}</span>
-            </div>
-
-            {/* 영상 난이도(색상·V등급)별 개수 */}
-            {g.routes_breakdown?.length > 0 && (
-              <div style={{ display: 'flex', gap: 5, marginTop: 10, flexWrap: 'wrap' }}>
-                {g.routes_breakdown.map((b, i) => {
-                  const m = colorMeta(b.color || 'gray');
-                  return (
-                    <span key={i} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '3px 8px', borderRadius: 'var(--r-pill)',
-                      background: 'var(--surface-2)', border: '1px solid var(--line)',
-                      fontSize: 11, color: 'var(--ink-1)', fontWeight: 600,
-                    }}>
-                      <span style={{
-                        width: 8, height: 8, borderRadius: '50%', background: m.dot,
-                        border: b.color === 'white' ? '1px solid var(--line-2)' : 'none',
-                      }} />
-                      {b.level || '미지정'}
-                      <span className="tabnum" style={{ color: 'var(--ink-3)' }}>×{b.count}</span>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            onEdit={setEditTarget}
+            onDelete={handleDelete}
+          />
         ))}
 
         {gyms.length === 0 && (

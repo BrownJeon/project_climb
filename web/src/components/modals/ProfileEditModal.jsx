@@ -4,10 +4,13 @@ import { I } from '../atoms/Icons';
 import { COLOR_KEYS, COLORS } from '../../utils/colors';
 import { usersApi } from '../../api/users';
 import { gymsApi } from '../../api/gyms';
+import { useAuth } from '../../contexts/AuthContext';
+import { VIDEO_QUALITY_PRESETS, getVideoQualityKey, setVideoQualityKey } from '../../utils/videoQuality';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
 export default function ProfileEditModal({ user, onClose, onSaved }) {
+  const { authLogout } = useAuth();
   const [nickname, setNickname] = useState(user.nickname || '');
   const [bio, setBio] = useState(user.bio || '');
   const [climbingStartedAt, setClimbingStartedAt] = useState(user.climbing_started_at || '');
@@ -20,6 +23,7 @@ export default function ProfileEditModal({ user, onClose, onSaved }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [showGymPicker, setShowGymPicker] = useState(false);
+  const [videoQuality, setVideoQualityState] = useState(getVideoQualityKey);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -216,6 +220,43 @@ export default function ProfileEditModal({ user, onClose, onSaved }) {
               </div>
             )}
           </Field>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>영상 업로드 화질</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+                  {VIDEO_QUALITY_PRESETS.find((p) => p.key === videoQuality)?.desc || ''}
+                </div>
+              </div>
+              <select
+                value={videoQuality}
+                onChange={(e) => {
+                  setVideoQualityKey(e.target.value);
+                  setVideoQualityState(e.target.value);
+                }}
+                style={{
+                  padding: '7px 10px', fontSize: 13, borderRadius: 'var(--r-sm)',
+                  border: '1px solid var(--line)', background: 'var(--surface-2)',
+                  color: 'var(--ink-1)',
+                }}
+              >
+                {VIDEO_QUALITY_PRESETS.map((p) => (
+                  <option key={p.key} value={p.key}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => { if (confirm('로그아웃 하시겠습니까?')) { authLogout(); onClose(); } }}
+              style={{
+                width: '100%', padding: '11px', marginTop: 28,
+                fontSize: 14, fontWeight: 600, color: 'var(--danger)',
+                border: '1px solid var(--line-2)', borderRadius: 'var(--r-sm)',
+                background: 'var(--surface)', cursor: 'pointer',
+              }}>
+              로그아웃
+            </button>
+          </div>
         </div>
       </div>
     </div>

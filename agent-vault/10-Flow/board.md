@@ -26,6 +26,8 @@ tags:
 
 ## Done
 
+- [[T008-settings-into-profile-edit]] · 마이페이지 설정 항목을 프로필 편집 화면으로 이동 (2026-08-18)
+- [[T007-mypage-recent-gyms]] · 마이페이지 최근 방문 암장 4개 미리보기 (2026-08-18)
 - [[T006-blob-edit-verification]] · 홀드 감지 blob 편집 실기 검증 — 결함 0건 (2026-08-16)
 - [[T005-remove-kakao-login]] · 카카오 로그인 제거 (지도 API는 유지) (2026-08-16)
 - [[T004-auth-flow]] · 웹 인증 플로우 (이메일/비밀번호 + OAuth) (2026-08-09)

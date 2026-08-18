@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import RouteCard from '../components/RouteCard';
+import GymCard from '../components/GymCard';
 import { Btn, ColorBadge, Pill } from '../components/atoms';
 import { I } from '../components/atoms/Icons';
 import ProfileEditModal from '../components/modals/ProfileEditModal';
@@ -9,15 +10,16 @@ import PassAddModal from '../components/modals/PassAddModal';
 import PassEditModal from '../components/modals/PassEditModal';
 import VideoUploadModal from '../components/modals/VideoUploadModal';
 import { usersApi } from '../api/users';
-import { useAuth } from '../contexts/AuthContext';
 import { passesApi } from '../api/passes';
+import { climbLogsApi } from '../api/climbLogs';
 import { formatTenure, formatDateKR } from '../utils/climbingTenure';
-import { VIDEO_QUALITY_PRESETS, getVideoQualityKey, setVideoQualityKey } from '../utils/videoQuality';
+
+const RECENT_GYMS_LIMIT = 4;
 
 const PAGE_LIMIT = 12;
 
 export default function MyPage() {
-  const { authLogout } = useAuth();
+  const nav = useNavigate();
   const [user, setUser] = useState(null);
   const [tab, setTab] = useState('routes');
   const [routes, setRoutes] = useState([]);
@@ -28,17 +30,22 @@ export default function MyPage() {
   const [bookmarksHasMore, setBookmarksHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [passes, setPasses] = useState([]);
+  const [recentGyms, setRecentGyms] = useState([]);
   const [editOpen, setEditOpen] = useState(false);
   const [passAddOpen, setPassAddOpen] = useState(false);
   const [passEditTarget, setPassEditTarget] = useState(null);
   const [videoUploadOpen, setVideoUploadOpen] = useState(false);
-  const [videoQuality, setVideoQualityState] = useState(getVideoQualityKey);
 
   function loadUser() {
     usersApi.me().then((r) => setUser(r.data)).catch(() => {});
   }
   function loadPasses() {
     passesApi.list().then((r) => setPasses(r.data?.passes || [])).catch(() => {});
+  }
+  function loadRecentGyms() {
+    climbLogsApi.visitedGymsWithDetail(RECENT_GYMS_LIMIT)
+      .then((r) => setRecentGyms(r.data?.gyms || []))
+      .catch(() => {});
   }
 
   async function loadRoutesPage(page, append) {
@@ -65,7 +72,7 @@ export default function MyPage() {
     } catch {} finally { setLoadingMore(false); }
   }
 
-  useEffect(() => { loadUser(); loadPasses(); }, []);
+  useEffect(() => { loadUser(); loadPasses(); loadRecentGyms(); }, []);
 
   useEffect(() => {
     if (tab === 'routes') loadRoutesPage(1, false);
@@ -274,43 +281,32 @@ export default function MyPage() {
         )}
       </div>
 
-      {/* 설정 섹션 */}
-      <div style={{ padding: '14px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>설정</div>
-        <button
-          onClick={() => { if (confirm('로그아웃 하시겠습니까?')) authLogout(); }}
-          style={{
-            width: '100%', padding: '11px', marginBottom: 14,
-            fontSize: 14, fontWeight: 600, color: 'var(--danger)',
-            border: '1px solid var(--line-2)', borderRadius: 'var(--r-sm)',
-            background: 'var(--surface)', cursor: 'pointer',
-          }}>
-          로그아웃
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>영상 업로드 화질</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
-              {VIDEO_QUALITY_PRESETS.find((p) => p.key === videoQuality)?.desc || ''}
-            </div>
-          </div>
-          <select
-            value={videoQuality}
-            onChange={(e) => {
-              setVideoQualityKey(e.target.value);
-              setVideoQualityState(e.target.value);
-            }}
-            style={{
-              padding: '7px 10px', fontSize: 13, borderRadius: 'var(--r-sm)',
-              border: '1px solid var(--line)', background: 'var(--surface-2)',
-              color: 'var(--ink-1)',
-            }}
-          >
-            {VIDEO_QUALITY_PRESETS.map((p) => (
-              <option key={p.key} value={p.key}>{p.label}</option>
-            ))}
-          </select>
+      {/* 최근 방문 암장 (최대 4개, GymCard는 GymListPage와 공유) */}
+      <div style={{
+        padding: '14px 16px', background: 'var(--surface)',
+        borderBottom: '1px solid var(--line)',
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-1)', marginBottom: 10 }}>
+          최근 방문 암장
         </div>
+
+        {recentGyms.length === 0 ? (
+          <div style={{
+            padding: '14px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 12.5,
+            border: '1px dashed var(--line-2)', borderRadius: 'var(--r-md)',
+          }}>최근 방문한 암장이 없습니다</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {recentGyms.map((g) => (
+              <GymCard
+                key={g.id}
+                gym={g}
+                showActions={false}
+                onClick={() => nav(`/gyms/${g.id}`)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tabs (영상/북마크) */}
