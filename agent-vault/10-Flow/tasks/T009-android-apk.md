@@ -4,7 +4,7 @@ title: 안드로이드 APK 앱 구현 (Capacitor 7 원격 URL 셸)
 slug: android-apk
 project: TheRoute
 status: doing
-roles_involved: leader, designer, developer, reviewer, qa
+roles_involved: (실행 주체 미정 — 에이전트 팀 재개편 예정, 2026-09-18 사용자 확인)
 created: 2026-09-18
 updated: 2026-09-18
 aliases: ["APK", "안드로이드 앱", "Capacitor 셸"]
