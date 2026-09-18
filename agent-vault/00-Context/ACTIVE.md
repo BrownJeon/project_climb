@@ -28,15 +28,21 @@ tags:
 - 사용자 결정: 카카오 로그인은 구현하지 않고 **제거**. `sns_provider` ENUM에서 `kakao` 삭제, 모바일 로그인 버튼·`getKakaoProfile` 제거 → Done ([[T005-remove-kakao-login]])
 - ⚠️ **카카오 지도 API(`KAKAO_REST_API_KEY`)는 유지** — 암장 위치 검색 실사용. 향후 "카카오 제거" 작업 시 반드시 구분할 것
 
-**안드로이드 APK 라인 (9월) — 진행 중**
-- BJJ task-039의 Capacitor 7 원격 URL 셸 방식을 이식. 설계 승인 완료 → [[T009-android-apk]]
-- 설계 문서: `docs/superpowers/specs/2026-09-18-android-apk-design.md`
+**안드로이드 APK 라인 (9월) — 설계·계획 완료, 구현 착수 대기 ⏸️**
+- BJJ task-039의 Capacitor 7 원격 URL 셸 방식을 이식 → [[T009-android-apk]]
+- 산출물: 설계 스펙 + **11개 태스크 구현 계획**(각 파일의 실제 코드·TDD 단계 포함). 둘 다 커밋됨
+  - `docs/superpowers/specs/2026-09-18-android-apk-design.md`
+  - `docs/superpowers/plans/2026-09-18-android-apk.md`
 - 사용자 결정: 전체 패리티(앱 OAuth 로그인 포함) · 기존 RN Expo `mobile/` 삭제 후 교체 · 아이콘은 생성기 방식
+- ⏸️ **구현은 에이전트 팀 재개편 이후로 미룸**(사용자 판단 2026-09-18). 계획서는 실행 주체에 의존하지 않아 어떤 팀 구조로든 그대로 실행 가능
 
 **인프라**
 - nginx vhost `climb.xn--lh0b87pnudm10a4vd.com.conf` 활성 확인 (2026-08-16) — 기존 "다음 할 일" 항목이었으나 이미 완료 상태였음
 
 ## 작업 방침
+
+**에이전트 팀 재개편이 현재 최우선** (사용자 판단 2026-09-18) — 현 구조가 레거시라 최신 프로젝트
+기준으로 재편한 뒤, 그 구조로 APK 구현에 착수한다.
 
 **~~웹 우선 (2026-08-16)~~ → 앱 패키징으로 전환 (사용자 지시 2026-09-18)**
 React Native Expo 앱은 **폐기**하고(SNS 로그인 파손 상태로 방치돼 있었음), 운영 웹을 그대로 싣는

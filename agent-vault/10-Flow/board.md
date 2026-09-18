@@ -18,11 +18,10 @@ tags:
 
 ## Todo
 
+- ⏸️ **[[T009-android-apk]] · 안드로이드 APK 앱 구현** — 설계·구현 계획 **완료**(스펙 + 11개 태스크 계획 커밋됨). 에이전트 팀 재개편을 먼저 끝낸 뒤 새 구조로 착수(사용자 판단 2026-09-18). 계획서는 실행 주체에 의존하지 않는다.
 - `JWT_SECRET` 처리 일원화 + 기동 시 fail-fast — **우선순위 낮음** (`.env`에 이미 설정돼 실질 위험 없음). `routes/auth.js`·`authController.js`는 `'theroute-dev-secret'` 폴백이 있고 `middleware/auth.js`는 없어, env 누락 시 서명/검증 불일치로 인증 전체가 깨지는 구조 ([[T004-auth-flow]])
 
 ## Doing
-
-- [[T009-android-apk]] · 안드로이드 APK 앱 구현 (Capacitor 7 원격 URL 셸) — 설계 승인 완료, 구현 계획 수립 중
 
 ## Review
 

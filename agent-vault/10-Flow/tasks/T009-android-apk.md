@@ -3,7 +3,7 @@ task_id: T009
 title: 안드로이드 APK 앱 구현 (Capacitor 7 원격 URL 셸)
 slug: android-apk
 project: TheRoute
-status: doing
+status: todo
 roles_involved: (실행 주체 미정 — 에이전트 팀 재개편 예정, 2026-09-18 사용자 확인)
 created: 2026-09-18
 updated: 2026-09-18
@@ -110,7 +110,7 @@ tags:
 
 ### designer
 
-(미착수)
+(미착수 — 아래 "진행 보류" 참고)
 
 ### developer
 
@@ -123,6 +123,19 @@ tags:
 ### qa
 
 (미착수)
+
+## 진행 보류 (2026-09-18)
+
+**설계와 구현 계획은 완료됐고, 구현 착수만 대기 중이다.**
+
+사용자 판단: 현재 에이전트 팀 구조가 레거시라 최신 프로젝트 기준으로 **재개편할 예정**이며,
+그 작업을 먼저 끝낸 뒤 새 구조로 이 계획을 실행한다.
+
+재개 시 할 일:
+1. `docs/superpowers/plans/2026-09-18-android-apk.md`를 Task 1부터 순서대로 실행
+2. 계획서는 실행 주체에 의존하지 않는다(에이전트·역할 언급 0건) — 어떤 팀 구조로든 그대로 쓸 수 있다
+3. 착수 전 재확인할 것: 운영 도메인 HTTPS 응답, `~/.node-local/android-sdk`·`~/.android/debug.keystore` 존재
+   (2026-09-18 기준 모두 충족이었으나 시간이 지났으면 다시 본다)
 
 ## 관련 이력
 
