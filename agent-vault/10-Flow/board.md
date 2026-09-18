@@ -22,6 +22,8 @@ tags:
 
 ## Doing
 
+- [[T009-android-apk]] · 안드로이드 APK 앱 구현 (Capacitor 7 원격 URL 셸) — 설계 승인 완료, 구현 계획 수립 중
+
 ## Review
 
 ## Done

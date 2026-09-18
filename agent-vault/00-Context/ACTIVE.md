@@ -1,6 +1,6 @@
 ---
 project: TheRoute
-updated: 2026-08-16
+updated: 2026-09-18
 tags:
   - type/context
 ---
@@ -28,12 +28,20 @@ tags:
 - 사용자 결정: 카카오 로그인은 구현하지 않고 **제거**. `sns_provider` ENUM에서 `kakao` 삭제, 모바일 로그인 버튼·`getKakaoProfile` 제거 → Done ([[T005-remove-kakao-login]])
 - ⚠️ **카카오 지도 API(`KAKAO_REST_API_KEY`)는 유지** — 암장 위치 검색 실사용. 향후 "카카오 제거" 작업 시 반드시 구분할 것
 
+**안드로이드 APK 라인 (9월) — 진행 중**
+- BJJ task-039의 Capacitor 7 원격 URL 셸 방식을 이식. 설계 승인 완료 → [[T009-android-apk]]
+- 설계 문서: `docs/superpowers/specs/2026-09-18-android-apk-design.md`
+- 사용자 결정: 전체 패리티(앱 OAuth 로그인 포함) · 기존 RN Expo `mobile/` 삭제 후 교체 · 아이콘은 생성기 방식
+
 **인프라**
 - nginx vhost `climb.xn--lh0b87pnudm10a4vd.com.conf` 활성 확인 (2026-08-16) — 기존 "다음 할 일" 항목이었으나 이미 완료 상태였음
 
 ## 작업 방침
 
-**웹 우선 (사용자 판단 2026-08-16)** — 모바일 앱(`mobile/`) 작업은 당분간 보류. 모바일 SNS 로그인이 파손된 상태이나 의도적으로 미해결로 둔다. 모바일 재개 시 [[board]] Backlog의 🅿️ 항목부터 확인할 것.
+**~~웹 우선 (2026-08-16)~~ → 앱 패키징으로 전환 (사용자 지시 2026-09-18)**
+React Native Expo 앱은 **폐기**하고(SNS 로그인 파손 상태로 방치돼 있었음), 운영 웹을 그대로 싣는
+Capacitor 셸로 간다. 웹이 여전히 단일 진실이며 앱은 껍데기다 — 웹 배포만으로 앱 화면이 갱신된다.
+[[board]] Backlog의 🅿️ 모바일 항목(RN 기준)은 이 전환으로 **무효**가 된다.
 
 ## 다음 할 일
 
