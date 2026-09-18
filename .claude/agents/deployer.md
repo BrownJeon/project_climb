@@ -97,8 +97,10 @@ TheRoute는 **아직 blue/green 배포 체계로 전환되지 않았다.** 현�
 | 운영 경로 | `/home/brownjeon/apps/theroute/current` |
 | 원격 저장소 | `http://192.168.219.154:3000/brownjeon/project_climb.git` |
 
-> ⚠️ **저장소 이름에 주의**: 워크스페이스 `docs/dev-deploy-workflow.md` §3의 예시가 TheRoute를 쓰면서
-> `project_TheRoute.git`으로 적어 두었으나 **실제 remote는 `project_climb.git`**이다. 매니페스트가 정본이다.
+> ⚠️ **저장소 이름이 디렉터리 이름과 다르다**: 디렉터리는 `TheRoute`인데 저장소는 **`project_climb`**이다.
+> `project_TheRoute`라는 저장소는 없다. 같은 예외가 `bjj-trainning`(→ `project_bjj-history`)에도 있으니,
+> 다른 프로젝트 매니페스트를 복사해 올 때 특히 주의한다
+> (저장소 이름 표: `docs/dev-deploy-workflow.md` §3).
 
 > ⚠️ **빌드가 두 곳이다**: 루트에 `package.json`이 없다. `backend/`와 `web/`에서 각각 설치·빌드해야 하며,
 > **`web/dist`는 gitignore 대상**이라 저장소에 없다 → 릴리스 디렉터리에서 반드시 빌드해야 화면이 뜬다.

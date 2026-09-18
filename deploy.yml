@@ -31,9 +31,9 @@ target:
   base: /home/brownjeon/apps/theroute
 
 source:
-  # ⚠️ 저장소 이름은 project_TheRoute 가 아니라 **project_climb** 이다.
-  #    docs/dev-deploy-workflow.md §3 의 예시가 project_TheRoute.git 으로 적혀 있으나
-  #    실제 remote 는 아래 값이다(`git remote -v` 로 확인).
+  # ⚠️ 저장소 이름이 디렉토리 이름(TheRoute)과 다르다 — **project_climb** 이다.
+  #    (`git remote -v` 로 확인. 같은 예외가 bjj-trainning 에도 있다 —
+  #     docs/dev-deploy-workflow.md §3 의 저장소 이름 표 참고)
   repo: http://192.168.219.154:3000/brownjeon/project_climb.git
   ref: main
 
