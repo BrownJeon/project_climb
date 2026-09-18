@@ -4,16 +4,16 @@
   },
   "hooks": {
     "SessionStart": [
-      { "matcher": "", "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/context-inject.sh" } ] }
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/agent-vault/context-inject.sh\"" } ] }
     ],
     "SubagentStart": [
-      { "matcher": "", "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/context-inject.sh" } ] }
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/agent-vault/context-inject.sh\"" } ] }
     ],
     "SubagentStop": [
-      { "matcher": "", "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/log-gate.sh" } ] }
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/agent-vault/log-gate.sh\"" } ] }
     ],
     "TaskCompleted": [
-      { "hooks": [ { "type": "command", "command": "bash /home/brownjeon/NFS/homes/brownjeon/project/.claude/hooks/agent-vault/log-gate.sh" } ] }
+      { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/agent-vault/log-gate.sh\"" } ] }
     ]
   }
 }
