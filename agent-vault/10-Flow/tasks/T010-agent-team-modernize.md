@@ -65,7 +65,19 @@ tags:
 ## 발견한 문서 오류
 
 - `docs/dev-deploy-workflow.md` §3 예시가 TheRoute를 쓰면서 저장소를 `project_TheRoute.git`으로 적어 뒀다.
-  **실제 remote는 `project_climb.git`** — `deploy.yml`과 `deployer.md`에 실제 값과 주의 문구를 남겼다.
+  **실제 remote는 `project_climb.git`**이다.
+  → **2026-09-19 해소**: 사용자 지시로 워크스페이스 문서를 직접 고쳤다. URL 교정에 더해,
+  조사 과정에서 같은 함정이 더 있음을 확인해 **저장소 이름 표**를 §3에 추가했다.
+
+  | 프로젝트 | 실제 저장소 |
+  |---|---|
+  | TheRoute | `project_climb` ← 디렉터리명과 다름 |
+  | bjj-trainning | `project_bjj-history` ← 디렉터리명과 다름 |
+  | VoiceVault · StockInvest · TradingInvest · home-m4-api | `project_<디렉터리명>` |
+  | TheCareerMng · TheThinker | GitHub — Gitea 아님 |
+  | TheMeal · OdinueAnalysis · OdinueDispatch | **remote 없음** (deploy.yml 의 repo 주소가 아직 존재하지 않는 저장소) |
+
+  워크스페이스는 git 저장소가 아니라 파일 편집만 했다.
 
 ## 역할별 기록
 
