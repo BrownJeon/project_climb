@@ -27,6 +27,7 @@ tags:
 
 ## Done
 
+- [[T010-agent-team-modernize]] · 서브에이전트 구성 최신화 — leader·deployer 신설, 기존 4종 재작성, deploy.yml 작성 (2026-09-18)
 - [[T008-settings-into-profile-edit]] · 마이페이지 설정 항목을 프로필 편집 화면으로 이동 (2026-08-18)
 - [[T007-mypage-recent-gyms]] · 마이페이지 최근 방문 암장 4개 미리보기 (2026-08-18)
 - [[T006-blob-edit-verification]] · 홀드 감지 blob 편집 실기 검증 — 결함 0건 (2026-08-16)

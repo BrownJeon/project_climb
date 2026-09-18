@@ -99,14 +99,17 @@ REACT_NATIVE_PACKAGER_HOSTNAME=125.177.194.26 npx expo start --lan --clear
 🚀 에이전트 팀 소집
 프로젝트: 클라이밍기록 (TheRoute)
 팀 구성:
-  - designer  (Opus)   — 화면 설계·목업 생성·구현 가이드 산출
-  - developer (Opus)   — React Native 화면·API 모듈·공통 컴포넌트 구현
-  - reviewer  (Sonnet) — 인증 분기 누락·메모리 리크·API 패턴 독립 감사
-  - qa        (Haiku)  — 코드 리뷰·인증 분기·UI/UX·보안 검증
+  - leader    (Opus)   — 사양 해석·작업 분배·Agent Vault 이력 큐레이션·최종 보고
+  - designer  (Opus)   — 화면 설계·API 호출 계획·구현 가이드 산출
+  - developer (Opus)   — web/src(React)·backend/src(Express) 구현
+  - reviewer  (Sonnet) — 의도 검증 + 인증 분기·타인 데이터 노출·조용한 실패 독립 감사
+  - qa        (Haiku)  — 체크리스트 실행 검증 (배포 게이트)
+  - deployer  (Haiku)  — QA PASS 후 scripts/deploy.sh 로 운영 배포 (선결 과제 4건 미해소 — deploy.yml 주석 참고)
 
-워크플로우: Designer → Developer → Reviewer → QA
+워크플로우: Leader → Designer → Developer → Reviewer → QA → Deployer → Leader
+  ※ QA 결함·배포 실패 시 Developer 수정 후 **Reviewer부터** 재순환합니다.
 작업 지시 방법:
-  → 새 화면 작업은 designer에게, 버그 수정·기능 추가는 developer에게 직접 지시합니다.
+  → leader에게 요청하면 팀이 역할별로 분담해서 처리합니다.
   → 팀 정리 시: "팀 정리해줘" 또는 "Clean up the team"
 ---
 ```

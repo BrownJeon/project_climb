@@ -1,0 +1,73 @@
+# TheRoute(클라이밍기록) 배포 매니페스트
+# 스키마: docs/dev-deploy-workflow.md §3 · 도입 절차: docs/deployer-integration-procedure.md
+# 실행 주체: .claude/agents/deployer.md
+#
+# ⚠️⚠️ 적용 전 선결 과제 4건 (2026-09-18 점검) — 해소 전에는 deploy.sh 를 실행하지 않는다.
+#
+#   1. 운영 루트가 없다. `/home/brownjeon/apps` 아래에 현재 `voicevault` 하나뿐이고
+#      `theroute` 디렉토리는 존재하지 않는다. 최초 도입 시 사용자가 만들어야 한다.
+#
+#   2. `ecosystem.config.js` 의 `cwd` 가 NFS 작업 디렉토리로 하드코딩돼 있다
+#      (`/home/brownjeon/NFS/homes/brownjeon/project/TheRoute`). blue/green 은 릴리스마다
+#      디렉토리가 바뀌므로 이 값을 고정해 두면 **배포해도 옛 코드가 계속 돈다.**
+#      `error_file`·`out_file` 의 절대경로도 같은 문제다. 릴리스 경로 기준으로 바꿔야 한다.
+#      → 지금 pm2 가 NFS 를 직접 실행하는 구조라, 이 전환은 운영 중단을 동반한다. 사용자 판단 필요.
+#
+#   3. 루트에 package.json 이 없다. backend/ 와 web/ 두 곳에서 각각 설치·빌드해야 한다
+#      (아래 build 항목이 그래서 두 단계로 되어 있다).
+#
+#   4. `web/dist` 가 .gitignore 대상이라 저장소에 없다. 릴리스 디렉토리에서 **반드시 빌드**해야
+#      화면이 뜬다. 빌드를 건너뛰면 /health 는 200 인데 화면만 비는 상태가 된다.
+#      (현재 운영은 NFS 에 빌드된 dist 를 backend 가 그대로 서빙하고 있다 —
+#       즉 지금까지 "배포"는 `cd web && npm run build` 한 줄이었다.)
+
+name: theroute
+
+target:
+  host: 125.177.194.26
+  # sshd 가 22 가 아니라 993 에서 돈다 (~/.ssh/config 의 home_ubuntu 별칭과 동일)
+  port: 993
+  user: brownjeon
+  base: /home/brownjeon/apps/theroute
+
+source:
+  # ⚠️ 저장소 이름은 project_TheRoute 가 아니라 **project_climb** 이다.
+  #    docs/dev-deploy-workflow.md §3 의 예시가 project_TheRoute.git 으로 적혀 있으나
+  #    실제 remote 는 아래 값이다(`git remote -v` 로 확인).
+  repo: http://192.168.219.154:3000/brownjeon/project_climb.git
+  ref: main
+
+runtime:
+  manager: pm2
+  app: theroute-api
+  port: 3100
+  ecosystem: ecosystem.config.js   # ⚠️ 선결 과제 2 — cwd 하드코딩 해소 후에만 유효하다
+
+build:
+  # 루트에 package.json 이 없어 두 곳을 각각 다룬다.
+  # backend 는 운영 의존성만, web 은 빌드에 devDependencies(vite)가 필요하므로 전체 설치한다.
+  install: cd backend && npm ci --no-audit --no-fund --omit=dev && cd ../web && npm ci --no-audit --no-fund
+  # web/dist 가 저장소에 없으므로 릴리스에서 반드시 빌드한다(선결 과제 4).
+  command: cd web && npm run build
+
+shared:
+  # 릴리스 간 유지 (심볼릭 링크)
+  - backend/.env     # ⚠️ 루트가 아니라 backend/ 아래에 있다
+  - uploads          # 사용자 업로드 이미지·영상 — 릴리스마다 새로 만들면 기존 파일이 사라진다
+  - logs
+
+health:
+  # ⚠️ /api/health 가 아니라 **/health** 다 (backend/src/index.js:30).
+  #    SPA 폴백 정규식이 api|uploads|health 를 제외하므로 이 경로는 API 응답을 준다.
+  path: /health
+  timeout: 30
+
+# 마이그레이션 경로 없음: Sequelize 를 쓰지만 마이그레이션 스크립트가 없고
+# backend/package.json 에 db:migrate 류 명령이 없다. 스키마는 모델 정의로 관리된다.
+# migrate 항목을 비워 두면 --with-migrate 를 줄 때 deploy.sh 가 거부한다 — 의도된 상태다.
+# 스키마 변경이 필요해지면 먼저 마이그레이션 체계를 갖춘 뒤 이 항목을 채운다.
+# migrate:
+#   command: <미정>
+#   requires_approval: true
+
+keep_releases: 5
