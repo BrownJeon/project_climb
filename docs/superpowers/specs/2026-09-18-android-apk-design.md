@@ -85,12 +85,13 @@ mobile/                                   ← RN Expo 삭제 후 재구성
     ├── app/src/main/java/com/miraclepenguin/theroute/MainActivity.java
     └── app/src/main/res/values/{styles.xml,theroute_colors.xml}
 
-web/scripts/gen-app-icons.mjs             아이콘 생성기 (도안이 코드에 있는 단일 진실)
+mobile/scripts/gen-app-icons.mjs          아이콘 생성기 (도안이 코드에 있는 단일 진실)
 web/src/native/bridge.js                  window.Capacitor 접근 유일 경로
 web/src/native/appLogin.js                딥링크 → 로그인 (React 비의존, 단위 테스트 가능)
 web/src/native/backStack.js               뒤로가기 스택 (React 비의존, 단위 테스트 가능)
 web/src/native/useBackHandler.js          모달이 열린 동안 뒤로가기로 닫히게 하는 훅
 web/src/native/NativeAppHost.jsx          앱에서만 켜지는 전역 연결부
+backend/src/routes/appAuth.js             app-start·app-exchange 핸들러 (테스트 가능하도록 분리)
 backend/src/services/appAuthCodes.js      60초·1회용 코드 저장소 + 쿠키 헬퍼
 backend/src/routes/appOAuthCallback.js    앱 로그인 복귀 가로채기
 ```
@@ -194,8 +195,10 @@ Google은 WebView 안 OAuth를 차단한다(`disallowed_useragent`). 그래서 C
 
 ### `GET /api/auth/app-start?provider=google|github[&fallback=1]`
 
-`routes/auth.js`에 추가한다. 🔴 **`router.use('/', oauthRouter)`보다 앞**에 둔다 — 뒤에 두면
-공용 라우터의 `GET /:provider`가 먼저 잡아 "Unknown OAuth provider" 404가 된다.
+핸들러는 `routes/appAuth.js`에 두고 `routes/auth.js`가 마운트만 한다 — 인라인 핸들러는 supertest
+없이 단위 테스트할 수 없는데, TheRoute에는 HTTP 테스트 라이브러리가 없고 추가하지 않는다.
+🔴 마운트는 **`router.use('/', oauthRouter)`보다 앞**이어야 한다 — 뒤에 두면 공용 라우터의
+`GET /:provider`가 먼저 잡아 "Unknown OAuth provider" 404가 된다.
 
 provider 화이트리스트(`['google','github']`) 검사 → 표시 쿠키 심기 → `302 /api/auth/<provider>`.
 응답 형식은 프로젝트 규약 `{ success, data, message }`를 따른다(실패 시 400).
@@ -339,7 +342,7 @@ TheRoute 웹에는 safe-area CSS가 **하나도 없는데** `BottomNav`가 화�
 
 ## 11. 아이콘
 
-`web/scripts/gen-app-icons.mjs` — 도안을 **파일 상단 상수로** 두는 단일 진실. 산출된 PNG/XML은
+`mobile/scripts/gen-app-icons.mjs` — 도안을 **파일 상단 상수로** 두는 단일 진실. 산출된 PNG/XML은
 손으로 고치지 않는다.
 
 - 모티브: 클라이밍 홀드 3점 + 이를 잇는 루트 라인. 배경 브랜드 `#ff5a3c`, 전경 흰색.
@@ -349,8 +352,11 @@ TheRoute 웹에는 safe-area CSS가 **하나도 없는데** `BottomNav`가 화�
   루트로 복사한다).
 - 🔴 전경 벡터 이름은 `ic_theroute_foreground`·`ic_theroute_monochrome`으로 분리한다 —
   Capacitor 템플릿의 `drawable-v24/ic_launcher_foreground.xml`이 같은 이름을 덮는다.
-- 생성기는 `sharp`를 필요로 한다. BJJ는 TheMeal의 ext4 설치본을 빌려 쓰는데 그쪽 정리 시 같이
-  깨진다 — TheRoute는 미러(`~/.node-local/theroute-mobile`)에 자체 설치한다.
+- 생성기는 `sharp`(네이티브 모듈)를 필요로 한다. BJJ는 생성기를 `web/scripts/`에 두고 TheMeal의 ext4
+  설치본을 빌려 쓰는데, 런북에 "TheMeal 정리 시 같이 깨진다"고 적힌 취약점이다. TheRoute는 생성기를
+  **`mobile/scripts/`에 두고** `sharp`를 `mobile/package.json` devDependency로 미러에 자체 설치한다 —
+  `sync-local.sh`가 이미 `mobile/scripts/`를 미러로 보내므로 미러에서 실행하면 `import sharp`가
+  형제 `node_modules`에서 경로 조작 없이 해결된다.
 
 ## 12. 빌드 절차
 

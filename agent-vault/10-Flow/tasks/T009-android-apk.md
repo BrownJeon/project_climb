@@ -28,6 +28,7 @@ tags:
 웹 배포만으로 반영되고 APK 재설치는 네이티브 설정을 바꿀 때만 필요하다.
 
 **설계 문서(단일 진실)**: [`docs/superpowers/specs/2026-09-18-android-apk-design.md`](../../../docs/superpowers/specs/2026-09-18-android-apk-design.md)
+**구현 계획(11개 태스크)**: [`docs/superpowers/plans/2026-09-18-android-apk.md`](../../../docs/superpowers/plans/2026-09-18-android-apk.md)
 
 ## 사용자 승인 결정 (2026-09-18)
 
@@ -104,7 +105,8 @@ tags:
 
 ### leader
 
-- 2026-09-18: brainstorming 스킬로 설계 확정 → 스펙 문서 작성 후 커밋. 구현 계획 수립으로 이행.
+- 2026-09-18: brainstorming 스킬로 설계 확정 → 스펙 문서 작성 후 커밋.
+- 2026-09-18: writing-plans 스킬로 11개 태스크 구현 계획 작성. 자기검토에서 생성기 경로·`web/dist` 커밋 대상 여부 등 불일치 3건을 찾아 스펙·계획 양쪽을 정렬.
 
 ### designer
 
