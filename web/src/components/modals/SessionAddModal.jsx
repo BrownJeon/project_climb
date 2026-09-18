@@ -51,7 +51,7 @@ export default function SessionAddModal({ mode = 'full', initialPrefill = {}, on
     ]).then(([p, c, s]) => {
       setPeriodPasses(p.data?.passes || []);
       setCountPasses(c.data?.passes || []);
-      setSectors(s.data?.data || []);
+      setSectors(s.data || []);
     }).catch(() => {});
     setPassKind(''); setPassId('');
   }, [gymId]);
