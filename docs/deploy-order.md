@@ -28,9 +28,11 @@
                                        └─ 실패 → 자동 롤백 (운영 그대로)
 ```
 
-> **현재 상태 (2026-09-19)**: 🔴 아직 blue/green 으로 컷오버되지 않았다. 운영 pm2 가 **NFS 편집 트리에서 직접** 돌고 있고,
-> 배포는 2026-09-19 부터 webhook(`deploy-climb.sh`)이 push 시 자동으로 수행한다.
-> 즉 **지금은 `scripts/deploy.sh` 경로가 아니라 webhook 경로가 현역**이다 — §1 을 반드시 먼저 읽는다.
+> **현재 상태 (2026-09-19)**: ✅ **blue/green 컷오버 완료** — 릴리스 `20260919-223933-51ae8e9e`, `RELEASE_RESULT status: ok`.
+> pm2 `theroute-api` 가 `/home/brownjeon/apps/theroute/releases/…` 에서 돈다.
+> 배포는 이제 **`scripts/deploy.sh TheRoute` 로만** 한다 — 종전처럼 NFS/미러에 빌드해도 운영에 반영되지 않는다.
+> **Gitea webhook 도 이날 새로 등록했다(hook id 5)** — 종전에는 수신기 매핑만 있고 훅이 없어
+> push 해도 아무 일도 일어나지 않았다. 이제 `git push` 가 곧 blue/green 배포다.
 
 ---
 
