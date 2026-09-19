@@ -100,6 +100,23 @@ REACT_NATIVE_PACKAGER_HOSTNAME=125.177.194.26 npx expo start --lan --clear
 
 **현재 상태 및 다음 작업은 memory `project_theroute.md` 참조**
 
+## 배포
+
+배포 절차의 **정본은 [`docs/deploy-order.md`](docs/deploy-order.md)** 다. 배포 전에 그 문서를 먼저 읽는다.
+
+| 항목 | 값 |
+|---|---|
+| 배포 명령 | `scripts/deploy.sh TheRoute` |
+| 실행 주체 | `.claude/agents/deployer.md` (QA PASS 이후에만 기동) |
+| 대상 프로세스 | theroute-api |
+| 현재 상태 | 🔴 아직 blue/green 컷오버 전 — NFS 직접 구동이며 현역 배포는 webhook(`deploy-climb.sh`)이다 |
+
+- 배포는 **`origin` 의 ref 기준**이다 — push 되지 않은 커밋은 나가지 않는다.
+- `--with-migrate`(DB 마이그레이션)는 **사용자 승인 사항**이다. 개발과 운영이 같은 NAS MariaDB 를 보고, 롤백은 코드만 되돌린다.
+- 배포 실패로 수정했다면 곧바로 재배포하지 않고 **Reviewer 부터 전체 재순환**한다.
+
+워크스페이스 공통: [배포 메커니즘](../docs/dev-deploy-workflow.md) · [연계 정책](../docs/deployer-integration-procedure.md) · [롤아웃 순서](../docs/deploy-rollout-order.md)
+
 ## 에이전트 팀 세션 프로토콜
 
 이 CLAUDE.md 로드 및 현재 상태 요약 완료 후, 아래 팀 소집 문구를 자동 출력한다.

@@ -89,6 +89,7 @@ TheRoute는 **아직 blue/green 배포 체계로 전환되지 않았다.** 현�
 
 | 항목 | 값 |
 |------|-----|
+| 배포 작업절차서 | [`TheRoute/docs/deploy-order.md`](../../docs/deploy-order.md) ← **배포 전 필독** |
 | 매니페스트 | [`TheRoute/deploy.yml`](../../deploy.yml) |
 | pm2 앱명 | `theroute-api` |
 | 포트 | `3100` |
@@ -234,6 +235,7 @@ DB 마이그레이션: 보류 (요청되지 않음)
 - [`docs/deployer-integration-procedure.md`](../../../docs/deployer-integration-procedure.md) — 역할 정의·연계 정책·운영 런북
 - [`docs/browser-verification.md`](../../../docs/browser-verification.md) — 배포 후 실화면 확인 절차
 - [`docs/agent-communication-protocol.md`](../../../docs/agent-communication-protocol.md) · [`docs/agent-vault-protocol.md`](../../../docs/agent-vault-protocol.md)
+- [TheRoute/docs/deploy-order.md](../../docs/deploy-order.md) — **이 프로젝트의 배포 작업절차서(정본)**
 - [TheRoute/deploy.yml](../../deploy.yml) — 배포 매니페스트 (선결 과제 주석 포함)
 - [TheRoute/CLAUDE.md](../../CLAUDE.md)
 </references>
