@@ -46,6 +46,10 @@ model: opus
 2. 보안 — JWT 검증 일관성, OAuth 콜백 분기, 업로드 경로 이탈 차단, 토큰을 URL·로그에 싣지 않음
 3. 정확성 — 요구 기능 누락 없음, 통계·누적 수치의 집계 기준 명시
 4. 운영성 — NFS noexec 실행 구조, `web/dist` 빌드 누락 방지, 헬스체크
+   - `web/dist` 빌드는 2026-09-19부터 `webhook-deploy/deploy-climb.sh` 가 자동 수행한다(ext4 미러
+     `~/.node-local/theroute-web-work` 에서 빌드 → NFS `web/dist` 로 복사). **이 자동화가 깨지지
+     않는지가 리뷰 포인트다** — `web/` 변경을 커밋·푸시했는데 운영 화면이 안 바뀌면 이 단계부터
+     의심할 것(과거엔 이 단계 자체가 아예 없어서 매번 수동 복사가 필요했다).
 
 **Escalation Conditions**:
 - 파일 경계 충돌 2회 이상 / 동일 결함 qa FAIL 3회 이상

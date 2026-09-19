@@ -75,6 +75,16 @@ pm2 logs theroute-api                   # 로그 확인
 ```
 - 포트: 3100, 프로세스명: `theroute-api`
 
+**웹(`web/`, Vite+React)** — backend 가 `web/dist` 를 직접 `express.static` 으로 서빙(별도 서빙
+경로 없음, `backend/src/index.js`). NFS가 `noexec` 라 `vite build`는 NFS 위에서 못 돈다 — ext4
+미러(`~/.node-local/theroute-web-work`)에서 빌드한 뒤 산출물을 NFS `web/dist` 로 되돌려 복사한다.
+`git push`로 자동 배포 시 `webhook-deploy/deploy-climb.sh`(2026-09-19 갱신)가 이 절차를 그대로
+수행한다 — **수동으로 `web/dist`를 복사해 둘 필요 없음.** 로컬 개발 실행만 필요하면:
+```bash
+rsync -a web/src/ ~/.node-local/theroute-web-work/src/ --delete
+cd ~/.node-local/theroute-web-work && npm run dev   # http://localhost:5173 (또는 vite 기본 포트)
+```
+
 **모바일 앱** (Claude 터미널은 비대화형 → 사용자가 직접 실행):
 ```bash
 cd /home/brownjeon/NFS/homes/brownjeon/project/TheRoute/mobile
