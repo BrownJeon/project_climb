@@ -39,22 +39,39 @@
 | # | 항목 | 상태 | 조치 주체 |
 |---|---|---|---|
 | 1 | 🔴 운영이 NFS 편집 트리에서 직접 구동 중 | 미해소 | 사용자 (컷오버, §9) |
-| 2 | 🔴 현재 배포는 **webhook `deploy-climb.sh`** 가 담당 → blue/green 과 이중 배포 위험 | 미해소 | 사용자 (§9) |
+| 2 | ⚠️ webhook 은 **수신기 쪽만 준비돼 있고 Gitea 훅이 등록돼 있지 않다** (2026-09-19 실측) | 확인됨 | 사용자 판단 |
 | 3 | 🔴 `ecosystem.config.js` 의 `cwd`·로그 경로가 NFS 절대경로로 하드코딩됨 | 미해소 | developer |
 | 4 | 🔴 `@workspace/auth-oauth` 의 `file:` 상대경로가 릴리스 깊이에서 깨짐 | 미해소 | developer + 사용자 승인 |
 | 5 | ⚠️ 루트에 `package.json` 이 없다 — `backend/`·`web/` 두 곳을 각각 다뤄야 한다 | `deploy.yml` 에 반영 완료 | — |
 | 6 | 🔴 `web/dist` 가 `.gitignore` 대상 — 릴리스에서 반드시 빌드해야 한다 | `deploy.yml` 에 반영 완료 | — |
 | 7 | `shared/backend/.env`·`shared/uploads` 서버 배치 | 미해소 | 사용자 (§9) |
 
-### 2번 — 지금 배포되는 경로는 무엇인가
+### 2번 — 지금 배포되는 경로는 무엇인가 (2026-09-19 실측)
 
-2026-09-19 부터 `webhook-deploy/deploy-climb.sh` 가 push 시 `web/` 빌드까지 자동 수행한다.
-즉 **현역 배포 경로는 push 다.** blue/green(`scripts/deploy.sh TheRoute`)으로 컷오버할 때
-이 훅을 그대로 두면 push 한 번에 두 경로가 동시에 배포된다.
+`.claude/agents/developer.md` 에는 "2026-09-19 부터 `deploy-climb.sh` 가 push 시 자동 빌드한다"고
+적혀 있었으나, **실제로는 자동배포가 돌지 않는다.** 이날 `main` 에 push 한 뒤 확인한 결과:
+
+| 확인 항목 | 결과 |
+|---|---|
+| 수신기 `server.js` 의 `REPOS` 매핑 | ✅ `'project_climb' → deploy-climb.sh` 존재 |
+| `deploy-climb.sh` 스크립트 파일 | ✅ 존재 |
+| push 후 `logs/project_climb.log` | ❌ **파일 자체가 없다** |
+| push 후 `theroute-api` pm2 uptime | 88분 — **재기동되지 않았다** |
+
+즉 **Gitea 저장소(`project_climb`) 쪽 webhook 이 등록돼 있지 않다.** 수신기는 준비됐는데
+훅이 없어 아무 일도 일어나지 않는 상태다.
+
+**지금 TheRoute 의 실제 배포는 수동이다** — `cd web && npm run build` 로 `web/dist` 를 갱신하고,
+backend 변경이면 `pm2 restart theroute-api`. pm2 가 NFS 편집 트리를 직접 실행하므로
+(`exec cwd` = `/home/brownjeon/NFS/.../TheRoute/backend`, 2026-09-19 실측) 빌드하는 순간 반영된다.
+
+컷오버 시 선택지는 그래서 이렇게 갈린다 — 사용자 판단 사항이다.
 
 컷오버 시 둘 중 하나를 택한다 — 사용자 판단 사항이다.
-- **(A)** 훅 스크립트를 `release.sh` 경유로 교체 ([`../../docs/webhook-deploy-guide.md`](../../docs/webhook-deploy-guide.md))
-- **(B)** 훅을 비활성화하고 `scripts/deploy.sh` 로만 배포
+- **(A)** Gitea 훅을 등록하되 `deploy-climb.sh` 를 `release.sh` 경유로 교체 ([`../../docs/webhook-deploy-guide.md`](../../docs/webhook-deploy-guide.md))
+- **(B)** 훅을 등록하지 않고 `scripts/deploy.sh TheRoute` 로만 배포 (현재 상태에서 그대로 진행)
+
+> 훅이 없는 지금은 **이중 배포 위험이 없다.** (A)를 택할 때만 생긴다.
 
 ### 3번 — `ecosystem.config.js` 가 NFS 를 가리킨다
 
@@ -313,7 +330,7 @@ ssh home_ubuntu 'pm2 delete theroute-api; cd <옛 경로> && pm2 start ecosystem
 - [ ] `deploy.yml`·`deployer.md`·이 문서가 커밋되고 **푸시**됐다
 - [ ] 업로드 데이터를 `shared/uploads` 로 **복사**했다 (이동 아님)
 - [ ] `ecosystem.config.js` 가 루트/`backend/` 중 하나로 통합돼 있다
-- [ ] webhook(`deploy-climb.sh`) 충돌을 (A) 또는 (B) 로 정리했다
+- [ ] webhook 경로를 (A) 또는 (B) 로 정했다 (현재는 Gitea 훅 미등록 — 그대로면 충돌 없음)
 
 > **롤백을 실제로 한 번 돌려보는 것**이 가장 중요하다. 롤백은 사고 났을 때 처음 쓰게 되는데,
 > 그때 처음 돌려보면 늦는다.

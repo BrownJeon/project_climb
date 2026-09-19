@@ -109,7 +109,7 @@ REACT_NATIVE_PACKAGER_HOSTNAME=125.177.194.26 npx expo start --lan --clear
 | 배포 명령 | `scripts/deploy.sh TheRoute` |
 | 실행 주체 | `.claude/agents/deployer.md` (QA PASS 이후에만 기동) |
 | 대상 프로세스 | theroute-api |
-| 현재 상태 | 🔴 아직 blue/green 컷오버 전 — NFS 직접 구동이며 현역 배포는 webhook(`deploy-climb.sh`)이다 |
+| 현재 상태 | 🔴 아직 blue/green 컷오버 전 — NFS 직접 구동. **webhook 은 Gitea 훅 미등록이라 실제 배포는 수동**(`cd web && npm run build`, 2026-09-19 실측) |
 
 - 배포는 **`origin` 의 ref 기준**이다 — push 되지 않은 커밋은 나가지 않는다.
 - `--with-migrate`(DB 마이그레이션)는 **사용자 승인 사항**이다. 개발과 운영이 같은 NAS MariaDB 를 보고, 롤백은 코드만 되돌린다.

@@ -41,8 +41,13 @@ model: opus
 ### 안전장치·테스트 환경
 
 - 새 순수 모듈(React 비의존)은 `test/`에 `node --test` 테스트를 함께 쓴다.
-- `web/dist`는 gitignore 대상이다 — 커밋하지 않는다. 운영 배포는 2026-09-19부터
-  `webhook-deploy/deploy-climb.sh` 가 push 시 자동으로 빌드하므로 수동 복사는 필요 없다 —
+- `web/dist`는 gitignore 대상이다 — 커밋하지 않는다.
+  ⚠️ **2026-09-19 정정**: 여기 적혀 있던 "`webhook-deploy/deploy-climb.sh` 가 push 시 자동으로 빌드한다"는
+  사실이 아니다. 수신기 매핑과 스크립트는 있지만 **Gitea 훅이 등록돼 있지 않아 push 해도 아무 일도
+  일어나지 않는다**(그날 push 후 `logs/project_climb.log` 부재·pm2 uptime 미변화로 실측).
+  현재 운영 반영은 **수동**이다 — `cd web && npm run build` 로 `web/dist` 갱신,
+  backend 변경이면 `pm2 restart theroute-api`. 상세: [`../../docs/deploy-order.md`](../../docs/deploy-order.md) §1-2.
+  아래는 정정 전 기술이다 —
   로컬에서 화면을 직접 확인할 때만 `~/.node-local/theroute-web-work`에서 빌드/`npm run dev`.
 - NFS는 `noexec`다. npm·gradle 등 실행이 필요한 작업은 `~/.node-local/<project>` 미러에서 돌린다.
 </project_context>
