@@ -52,8 +52,11 @@ build:
 
 shared:
   # 릴리스 간 유지 (심볼릭 링크)
-  - backend/.env     # ⚠️ 루트가 아니라 backend/ 아래에 있다
-  - uploads          # 사용자 업로드 이미지·영상 — 릴리스마다 새로 만들면 기존 파일이 사라진다
+  - backend/.env     # ⚠️ 루트가 아니라 backend/ 아래에 있다 (pm2 cwd 가 <릴리스>/backend 다)
+  # ⚠️ `uploads` 는 넣지 않는다 — 2026-09-19 확인 결과 미디어는 소스 트리 밖에 있다:
+  #    backend/.env 의 MEDIA_UPLOAD_PATH = /home/brownjeon/NFS/.../project/files/...
+  #    여기 적으면 쓰이지도 않는 빈 디렉토리만 생긴다. 다만 그 NFS 경로는
+  #    **릴리스 밖의 공유 자원이라 롤백되지 않는다** — DB 와 같은 등급으로 취급한다.
   - logs
 
 health:
