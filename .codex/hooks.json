@@ -1,0 +1,57 @@
+﻿{
+    "description":  "Agent Vault lifecycle hooks for TheRoute.",
+    "hooks":  {
+                  "SessionStart":  [
+                                       {
+                                           "hooks":  [
+                                                         {
+                                                             "commandWindows":  "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d = Get-Item (Get-Location).Path; while ($d -and -not (Test-Path (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/context-inject.ps1\u0027))) { $d = $d.Parent }; if ($d) { \u0026 (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/context-inject.ps1\u0027) }\"",
+                                                             "command":  "bash -lc \u0027d=\"$PWD\"; while [ \"$d\" != / ] \u0026\u0026 [ ! -f \"$d/.codex/hooks/agent-vault/context-inject.sh\" ]; do d=$(dirname \"$d\"); done; [ -f \"$d/.codex/hooks/agent-vault/context-inject.sh\" ] \u0026\u0026 exec bash \"$d/.codex/hooks/agent-vault/context-inject.sh\" || exit 0\u0027",
+                                                             "timeout":  15,
+                                                             "type":  "command"
+                                                         }
+                                                     ],
+                                           "matcher":  ""
+                                       }
+                                   ],
+                  "SubagentStart":  [
+                                        {
+                                            "hooks":  [
+                                                          {
+                                                              "commandWindows":  "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d = Get-Item (Get-Location).Path; while ($d -and -not (Test-Path (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/context-inject.ps1\u0027))) { $d = $d.Parent }; if ($d) { \u0026 (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/context-inject.ps1\u0027) }\"",
+                                                              "command":  "bash -lc \u0027d=\"$PWD\"; while [ \"$d\" != / ] \u0026\u0026 [ ! -f \"$d/.codex/hooks/agent-vault/context-inject.sh\" ]; do d=$(dirname \"$d\"); done; [ -f \"$d/.codex/hooks/agent-vault/context-inject.sh\" ] \u0026\u0026 exec bash \"$d/.codex/hooks/agent-vault/context-inject.sh\" || exit 0\u0027",
+                                                              "timeout":  15,
+                                                              "type":  "command"
+                                                          }
+                                                      ],
+                                            "matcher":  ""
+                                        }
+                                    ],
+                  "SubagentStop":  [
+                                       {
+                                           "hooks":  [
+                                                         {
+                                                             "commandWindows":  "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d = Get-Item (Get-Location).Path; while ($d -and -not (Test-Path (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/log-gate.ps1\u0027))) { $d = $d.Parent }; if ($d) { \u0026 (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/log-gate.ps1\u0027) }\"",
+                                                             "command":  "bash -lc \u0027d=\"$PWD\"; while [ \"$d\" != / ] \u0026\u0026 [ ! -f \"$d/.codex/hooks/agent-vault/log-gate.sh\" ]; do d=$(dirname \"$d\"); done; [ -f \"$d/.codex/hooks/agent-vault/log-gate.sh\" ] \u0026\u0026 exec bash \"$d/.codex/hooks/agent-vault/log-gate.sh\" || exit 0\u0027",
+                                                             "timeout":  15,
+                                                             "type":  "command"
+                                                         }
+                                                     ],
+                                           "matcher":  ""
+                                       }
+                                   ],
+                  "Stop":  [
+                               {
+                                   "hooks":  [
+                                                 {
+                                                     "commandWindows":  "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d = Get-Item (Get-Location).Path; while ($d -and -not (Test-Path (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/log-gate.ps1\u0027))) { $d = $d.Parent }; if ($d) { \u0026 (Join-Path $d.FullName \u0027.codex/hooks/agent-vault/log-gate.ps1\u0027) }\"",
+                                                     "command":  "bash -lc \u0027d=\"$PWD\"; while [ \"$d\" != / ] \u0026\u0026 [ ! -f \"$d/.codex/hooks/agent-vault/log-gate.sh\" ]; do d=$(dirname \"$d\"); done; [ -f \"$d/.codex/hooks/agent-vault/log-gate.sh\" ] \u0026\u0026 exec bash \"$d/.codex/hooks/agent-vault/log-gate.sh\" || exit 0\u0027",
+                                                     "timeout":  15,
+                                                     "type":  "command"
+                                                 }
+                                             ],
+                                   "matcher":  ""
+                               }
+                           ]
+              }
+}
