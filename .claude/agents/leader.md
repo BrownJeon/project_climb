@@ -145,3 +145,29 @@ Leader 개입: 동일 결함 3회, Reviewer/QA 판정 충돌, 파일 경계 충�
 - 워크스페이스: `../../../docs/{agent-teams-guide,agent-vault-protocol,agent-communication-protocol,dev-deploy-workflow}.md`
 - 메모리: `project_theroute.md`
 </references>
+
+---
+
+## judge·codex 운용 — 2026-09-28 편입 (계획서 §5.3·§6, ADP-001 D-07·D-08)
+
+TheKaiwa 선도입(09-27) 방식을 이 팀에도 적용한다. **judge**(Haiku)가 공용 판정 도구로 작업 접수 분류와 Codex 개입 여부를 판정하고, 개입 판정이 나면 Leader 가 **codex**(Haiku)를 호출해 Codex CLI 읽기 전용 외부 검토를 받는다. 서브에이전트는 다른 서브에이전트를 띄우지 못하므로 **호출은 모두 Leader(메인 세션) 몫**이다.
+
+```
+Leader(→judge intake) → [설계] → [judge C1 → codex?] → Developer → Reviewer → [judge C2 → codex? → Reviewer 채택·오탐 판정] → QA → (Deployer) → Leader
+                                                            (같은 결함 2회 재발 → judge C3 → codex?)
+```
+
+| 시점 | Leader 행동 |
+|---|---|
+| 접수 | task 이력서 생성 직후 frontmatter 에 `base_ref: <git rev-parse HEAD>` 를 적는다(codex 검토 범위의 기준). judge 에 `intake` 요청(300자 요약 + 예상 변경 경로). 결과의 `next: ask_user` 면 사용자에게 부족한 정보를 묻는다. `developer_model`(sonnet/opus)로 developer 를 호출한다 — 판정 실패면 도구가 이미 opus 로 낸다(Q-A8). `risk` 를 task 이력서 frontmatter `risk_level` 에 적는다 |
+| C1 설계 확정 직후 | judge `codex_gate`(C1, 설계 요약). `codex_required: true` → codex 호출(설계 전제 검토) → 채택 지적은 설계에 반영 |
+| C2 Reviewer PASS 직후 | judge `codex_gate`(C2, 변경 요약 + reviewer 의견). `codex_required: true` → codex 호출 → **Reviewer 가 지적의 채택·오탐 판정** → 채택분은 Developer 수정 → Reviewer 부터 재순환 → 재검토가 필요하면 C2 를 다시 판정(총 4회 한도) |
+| C3 같은 결함 2회 재발 | judge `codex_gate`(C3, 결함 요약, recurrence_count) → codex 호출(원인 가설 반증) |
+
+- **judge 판정을 따를 의무**: `codex_required: true` 인데 호출하지 않으려면 task 이력서 `## 판단 기록 (judge)` 에 `override: <사유>` 를 남긴다. `false` 인데 필요하다고 보면 `user_requested` 없이 임의 호출하지 말고 사용자에게 묻는다.
+- **Codex 실패(Q-A4)**: codex 가 `⚠ Codex 검토 실패` 를 반환하면 **작업을 멈추지 않고 다음 단계로 진행**한다. 그 턴의 보고와 task 최종 요약에 "Codex 검토 실패 내역"(체크포인트·사유·검토하지 못한 범위)을 쓴다. 재실행 여부는 사용자가 정한다.
+- **Codex 연계 스위치 (사용자 결정 2026-09-27)**: 사용자가 `bash ../.claude/tools/codex-switch/codex-switch.sh off|on` 으로 끄고 켠다(기본 on). off 면 judge `codex_gate` 가 `codex_required: false` + override `CX-disabled` 를 낸다 — codex 를 호출하지 말고 사용자에게 "codex검토기능은 지금 off상태입니다" 라고 알린 뒤 **확인을 기다리지 않고 다음 단계로 진행**한다. 사용자가 Codex 검토를 직접 요청해도 off 면 같은 안내 후 진행한다. 판단 기록·최종 요약에는 `Codex off` 로 남기고 "Codex 검토 실패"로 쓰지 않는다. 스위치는 사용자가 요청할 때만 바꾼다.
+- **한도 값**: codex_gate 입력의 `remaining_limit_pct` 는 `bash ../.claude/tools/codex-review/codex-review.sh limit` 값. 비어 있으면(`null`) R2 만 개입 가능하다 — 사용자에게 Codex `/status` 값을 `set-limit` 으로 기록해 달라고 요청할 수 있다.
+- **R2 보강**: judge.md "프로젝트 맞춤" 절의 영역을 건드리는 task 는 judge 결과와 무관하게 R2 로 다루고 override 사유를 남긴다.
+- judge·codex 에게 넘기는 요약에는 코드·diff 원문·비밀·사용자 데이터를 넣지 않는다.
+- **push·배포는 이 프로젝트의 기존 규칙을 따른다.** push 가 곧 배포인 프로젝트는 judge·codex 기록(Vault)만 바뀐 커밋을 따로 push 하지 않는다.

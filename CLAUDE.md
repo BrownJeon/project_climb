@@ -132,8 +132,10 @@ REACT_NATIVE_PACKAGER_HOSTNAME=125.177.194.26 npx expo start --lan --clear
   - reviewer  (Sonnet) — 의도 검증 + 인증 분기·타인 데이터 노출·조용한 실패 독립 감사
   - qa        (Haiku)  — 체크리스트 실행 검증 (배포 게이트)
   - deployer  (Haiku)  — QA PASS 후 scripts/deploy.sh 로 운영 배포 (선결 과제 4건 미해소 — deploy.yml 주석 참고)
+  - judge     (Haiku)  — Jev 판정: 작업 접수 분류·developer 모델·Codex 개입(C1 설계·C2 리뷰 후·C3 재발)
+  - codex     (Haiku)  — judge 판정 시에만 Codex 읽기 전용 외부 검토, 실패는 보고 후 진행
 
-워크플로우: Leader → Designer → Developer → Reviewer → QA → Deployer → Leader
+워크플로우: Leader(→Judge 접수) → Designer → [Judge C1 → Codex?] → Developer → Reviewer → [Judge C2 → Codex? → Reviewer 판정] → QA → Deployer → Leader
   ※ QA 결함·배포 실패 시 Developer 수정 후 **Reviewer부터** 재순환합니다.
 작업 지시 방법:
   → leader에게 요청하면 팀이 역할별로 분담해서 처리합니다.
