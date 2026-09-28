@@ -142,3 +142,5 @@ REACT_NATIVE_PACKAGER_HOSTNAME=125.177.194.26 npx expo start --lan --clear
   → 팀 정리 시: "팀 정리해줘" 또는 "Clean up the team"
 ---
 ```
+
+화면 신규·구조 변경 작업은 데모 검토 게이트(워크스페이스 [`docs/demo-review-gate.md`](../docs/demo-review-gate.md))를 거친다 — designer 버전별 데모(`docs/demo/<task-id>-<slug>-v<N>.html`) → 사용자 승인 → 구현 (2026-09-28, ADP-001 D-09).

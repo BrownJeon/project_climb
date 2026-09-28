@@ -127,3 +127,15 @@ engine: jev|rules (fallback: <사유 또는 없음>)
 - 계획서 §5.3(역할·계약)·§6(Codex 예산)·§13A(제거·교체)
 - ADP-001 D-07(전송 범위·예산), 31 레퍼런스(Jev 규칙)
 </references>
+
+## 데모 판정 — 2026-09-28 편입 (ADP-001 D-09, judge-result@2)
+
+절차 정본: 워크스페이스 `docs/demo-review-gate.md` · 판정 규칙: `../.claude/tools/jev-judge/README.md` "데모 검토 게이트 판정" 절.
+
+- intake 출력은 `judge-result@2` 다. `decision` 에 `demo`·`next_actions`·`blocking_gate` 가 추가됐고, `next` 에 `inactive_project`·`fix_team_configuration`·`demo_first` 가 생겼다. 우선순위: `inactive_project` > `ask_user` > `fix_team_configuration` > `demo_first` > `assign`.
+- Leader 가 준 경우에만 입력에 넣는다: `new_paths`(새로 만들 파일, 프로젝트 기준 상대경로 — 절대경로·`..` 는 도구가 입력 거부), `demo_pref`(`require`|`waive`), `waiver_quote`(사용자 생략 원문).
+- Leader 보고의 `결정` 줄에 `demo=<level>/<owner>(<rule_id>)` 와 `actions=<next_actions>` 를 덧붙인다. 예: `결정: task_type=feature · risk=R1 · developer_model=opus · next=demo_first · demo=full/designer(DM-kw-full) · actions=prepare_demo,request_demo_approval,assign_developer`
+- 판단 기록 줄에도 `demo=<level>/<owner>` 를 남긴다.
+- **생략은 확정하지 않는다.** `waiver_requested=true` 는 "사용자 원문 확인 필요" 표시일 뿐이다. 확정은 Leader 의 `demo-gate/check.mjs waive`.
+- judge 출력 JSON 은 Leader 가 `check.mjs init --judge` 에 넘길 수 있게 파일(`/tmp/judge-<task>-intake.out.json`)로도 저장해 경로를 알린다.
+- 이 프로젝트는 UI 프로젝트(`projects.json` ui_projects)다 — 데모 담당 designer, 게시 방식 `artifact+repo`.

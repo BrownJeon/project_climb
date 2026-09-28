@@ -3,6 +3,14 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "hooks": {
+    "PreToolUse": [
+      { "matcher": "^(Bash|Agent|Task)$", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/codex-switch/guard.sh\"", "timeout": 10 } ] },
+      { "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Bash)$", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/demo-gate/guard.sh\"", "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/codex-switch/guard.sh\"", "timeout": 10 } ] },
+      { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/demo-gate/prompt-log.sh\"", "timeout": 10 } ] }
+    ],
     "SessionStart": [
       { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/../.claude/hooks/agent-vault/context-inject.sh\"" } ] }
     ],

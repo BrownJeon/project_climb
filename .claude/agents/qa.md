@@ -182,3 +182,12 @@ Leader가 전달한 task 파일 **하나만** 읽습니다. 다른 task를 탐�
 - [CLAUDE.md](../../CLAUDE.md) · [docs/architecture.md](../../docs/architecture.md)
 - 토큰: `web/src/styles/base.css` · 인증: `web/src/contexts/AuthContext.jsx`
 </references>
+
+## 데모 검토 게이트 — 2026-09-28 편입 (ADP-001 D-09)
+
+절차 정본: 워크스페이스 `docs/demo-review-gate.md` §8.
+
+- `node ../.claude/tools/demo-gate/check.mjs check --task <task.md>` 결과를 확인하고, **승인 데모 버전 = 구현 가이드 버전 = 스크린샷 비교 기준**인지 확인한다.
+- task 이력서 `## QA 시각 검증` 절에 재현 조건을 적는다: viewport 너비·높이, device scale factor, 브라우저와 버전, light·dark, locale(ko-KR), timezone(Asia/Seoul), 글꼴 로딩 완료 대기, 애니메이션 비활성, 네트워크 fixture 사용 여부, 캡처 범위(전체·상태별), 허용 범위(Reviewer 차이 분류 기준).
+- 기기 폭: 대표 390px, 경계 360·412px. 실제 breakpoint 가 있으면 추가한다.
+- 재현 조건을 적지 않은 캡처로 PASS 하지 않는다. 스크린샷은 `/tmp/qa-artifacts` 에 만든 뒤 명시적으로 복사한다.

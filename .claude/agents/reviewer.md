@@ -201,3 +201,19 @@ Leader가 전달한 task 파일 **하나만** 읽습니다. 다른 task를 탐�
 ## Codex 검토 결과 판정 — 2026-09-28 편입 (judge·codex 운용)
 
 judge 가 C2(Reviewer PASS 직후)에서 Codex 개입을 판정하면 Leader 가 codex 를 호출하고, 그 결과(task 이력서 `## Codex 검토`)가 당신에게 온다. 지적마다 **채택 / 오탐 / 범위 밖** 을 근거와 함께 판정해 Reviewer 기록 절에 남긴다. 채택 지적은 Developer 수정 → 당신부터 재순환한다. Codex 지적을 근거 확인 없이 그대로 채택하거나, Codex 가 PASS 했다는 이유로 자기 감사를 생략하지 않는다. Codex 검토가 실패(⚠)하거나 off(ℹ)여도 당신의 판정 기준은 바뀌지 않는다.
+
+## 데모 검토 게이트 — 2026-09-28 편입 (ADP-001 D-09)
+
+절차 정본: 워크스페이스 `docs/demo-review-gate.md` §7.
+
+- 화면을 바꾼 task 는 `node ../.claude/tools/demo-gate/check.mjs check --task <task.md>` 를 다시 실행하고 결과를 리뷰에 적는다. `DEMO_GATE_BLOCKED` 면 FAIL 이다.
+- `check` PASS 는 필요조건이다. `.claude/state/demo-gate/evidence.jsonl` 의 해당 승인 줄(task·버전·세션)이 실제 대화 흐름과 맞는지 보고, 에이전트가 `approve`·`waive` 를 대신 실행했거나 `.claude/state/demo-gate/` 파일을 직접 쓴 흔적이 있으면 FAIL 로 보고한다.
+- 승인 데모(구현 가이드의 vN)와 구현을 비교해 차이를 분류한다.
+
+| 분류 | 예 | 처리 |
+|---|---|---|
+| material | 정보구조, 주요 문구의 의미, 네비게이션, CTA 동작, 단계 추가·삭제, 크기·우선순위의 중요한 변화 | Leader 에게 데모 vN+1 재승인 요청 |
+| implementation | 브라우저 렌더링, 실제 콘텐츠 길이, 폰트 미세 차이, 기술적으로 필요한 내부 구조 조정 | 근거를 적고 허용 |
+| defect | 승인본 요구 누락, 다른 동작 | Developer 수정 → Reviewer 부터 재순환 |
+
+- 픽셀 차이를 일괄 결함으로 처리하지 않는다. 데모 수준이 none(`not_required`)이어도 일반 UI 검증은 그대로 한다.
