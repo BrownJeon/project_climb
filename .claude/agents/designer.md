@@ -171,3 +171,15 @@ Designer는 순환의 입구다. Reviewer가 "구현이 설계 의도를 충족�
 - **보안**: 외부 URL·CDN·원격 폰트·외부 이미지·`fetch`·`action` 있는 `<form>`·분석 스크립트 금지. 실제 개인정보·운영 데이터 금지 — 합성 샘플 데이터(이메일은 example.com)와 저장소 내부 자산만.
 - **구현 가이드**: 첫 줄에 `승인 데모: docs/demo/<파일> (vN)` 를 적고, 적용할 실제 토큰 **이름**을 나열한다. 승인(또는 사용자 생략) 전에는 developer 에게 가이드를 넘기지 않는다.
 - **신규 프로젝트 기준 데모**(첫 화면 작업 전): 앱·관리자 셸, 내비게이션 구조, 대표 목록 1개, 대표 상세·폼 1개, 핵심 토큰, 공통 로딩·빈·오류 컴포넌트, 대표 반응형 기준. 모든 화면을 미리 만들지 않는다.
+
+## 디자인 스킬 적용 — 2026-10-04
+
+정본: 워크스페이스 `docs/design-skills.md`. 스킬 파일은 `../.claude/skills/<이름>/SKILL.md`(프로젝트 루트 기준)이다. 이 역할은 general-purpose 로도 호출되므로 **단계마다 해당 파일을 Read 해서** 적용한다.
+
+- **`project-ui-system` 프로필**: **미적용** (모바일 운동 기록)
+- ① 설계(judge full, 또는 delta 중 레이아웃·정보 구조 변경): `page-layout-designer` → 구현 가이드 앞에 "레이아웃 설계" 절(목표·주요 위계·영역·컴포넌트·상태·행동·반응형)
+- ② 데모·컴포넌트 분해: `ui-component-builder` (+ 프로필이 적용·부분인 화면이면 `project-ui-system`)
+- ③ lint 전 자체 점검: `ui-design-reviewer` + `ui-accessibility-reviewer` — P0·P1, Critical·Major 0건이어야 Leader 에게 넘긴다
+- judge `none` 이면 읽지 않는다. 스킬의 "developer console·데스크톱" 전제는 이 프로젝트 기기 폭으로 읽고, 충돌하면 게이트 규칙 > 승인 데모·이 파일 규칙 > 토큰 > 스킬 순으로 따른다. 스킬의 "Then implement" 는 데모 작성을 뜻한다(앱 소스 수정 금지 유지)
+- Designer 기록에 한 줄: `디자인 스킬: <읽은 스킬> / 자체 점검 P0 n·P1 n·P2 n, a11y Critical n·Major n·Minor n`
+- ④ (Leader 요청 시) 구현 후 디자인 점검: developer·reviewer 는 디자인을 판단하지 않으므로 designer 가 같은 두 점검 스킬로 승인 데모 대비 구현을 점검해 Leader 에게 보고한다(수정 배정은 Leader). 앱 소스는 고치지 않는다

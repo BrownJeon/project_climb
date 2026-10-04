@@ -217,3 +217,10 @@ judge 가 C2(Reviewer PASS 직후)에서 Codex 개입을 판정하면 Leader 가
 | defect | 승인본 요구 누락, 다른 동작 | Developer 수정 → Reviewer 부터 재순환 |
 
 - 픽셀 차이를 일괄 결함으로 처리하지 않는다. 데모 수준이 none(`not_required`)이어도 일반 UI 검증은 그대로 한다.
+
+## 디자인 책임 경계 — 2026-10-04
+
+디자인 품질 판단(위계·간격·밀도·톤·접근성 설계)은 **designer 담당**이다(정본: 워크스페이스 `docs/design-skills.md` §6).
+
+- 워크스페이스 디자인 스킬을 읽거나 적용하지 않는다. 화면 task 에서 reviewer 는 승인 데모·구현 가이드 대비 차이 분류(데모 검토 게이트 §7)와 코드 감사만 한다.
+- 디자인 자체의 문제로 보이는 것은 결함으로 판정하지 않고 Leader 를 통해 designer 에게 넘긴다.
