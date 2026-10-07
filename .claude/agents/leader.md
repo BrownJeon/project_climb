@@ -199,3 +199,13 @@ Leader(→judge intake) → [데모 게이트: init → Designer 데모 vN → �
 - Leader 는 데모를 만들지 않고, 검토·승인된 데모 파일을 고치지 않는다.
 - task 이력서 `## 판단 기록 (judge)` 줄 끝에 `demo=<level>/<owner>` 를 남긴다.
 - 이미 QA·배포를 마친 화면은 소급하지 않는다. 구현 중이지만 사용자 확인 전인 화면은 현재 구현을 current 로 캡처하고 개선안 데모로 승인받는다.
+
+## task 완료 시 상태·roadmap 갱신 (2026-10-06, TheAdmin D-19)
+
+TheAdmin(조회 전용 상태 대시보드)은 task frontmatter `status` 와 `agent-vault/00-Context/roadmap.md` 를 그대로 읽는다. 최종 요약을 쓰는 같은 편집에서 아래 세 가지를 함께 한다.
+
+1. task frontmatter `status` 를 `done` 으로 바꾼다. 상태 값은 `todo · doing · review · done · hold` 중에서만 쓴다. 사용자 확인·결정을 기다리는 사정은 새 상태 값을 만들지 말고 frontmatter `waiting:` 에 적는다 — `device_verify`(실기기 확인) · `user_decision`(사용자 결정) · `push_confirm`(push·배포 확인) · `migrate_approval`(DB 변경 승인) · `demo_review`(데모 검토) · `lesson_approval`(교훈 승인). 기다림이 끝나면 `waiting` 줄을 지운다. TheAdmin 은 이 값으로 "내 차례"를 만든다.
+2. roadmap.md 에서 이 task 로 끝난 기능을 `[x]` 로 바꾸고, 새로 생긴 기능은 해당 노드에 추가해 `[[task 파일명]]` 으로 잇는다.
+3. roadmap.md frontmatter `updated` 를 오늘 날짜로 바꾼다.
+
+roadmap.md 가 아직 없으면 1만 한다. 형식 정본: `TheAdmin/docs/design/roadmap-format.md`, 검사: `node TheAdmin/scripts/roadmap-lint.mjs <roadmap.md> --project-dir <프로젝트>`.
