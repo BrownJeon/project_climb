@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Btn } from '../atoms';
 import { passesApi } from '../../api/passes';
+import useBackHandler from '../../native/useBackHandler';
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 export default function PassEditModal({ pass, onClose, onSaved }) {
+  useBackHandler(true, onClose);
   const isPeriod = pass.pass_type === 'period';
 
   const [label, setLabel] = useState(pass.label || '');

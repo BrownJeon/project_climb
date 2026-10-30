@@ -5,6 +5,9 @@ import './styles/tokens.css';
 import './styles/app.css';
 
 import { AuthProvider } from './contexts/AuthContext';
+import NativeAppHost from './native/NativeAppHost';
+import LoginRouteKey from './native/LoginRouteKey';
+import { isNativeApp } from './native/bridge.js';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import { SessionAddModalProvider } from './contexts/SessionAddModalContext';
@@ -28,12 +31,17 @@ import GrowthPage from './pages/GrowthPage';
 import RoutinePage from './pages/RoutinePage';
 import NotFoundPage from './pages/NotFoundPage';
 
+// T009 — 안드로이드 앱(Capacitor WebView)이면 <html data-native="app"> 를 단다. 앱 전용 CSS 가 필요해지면
+// [data-native] 선택자로 쓴다(현재 이 속성을 읽는 스타일은 없다). 웹 브라우저에서는 아무것도 바뀌지 않는다.
+if (isNativeApp()) document.documentElement.setAttribute('data-native', 'app');
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
+        <NativeAppHost />
         <Routes>
-          <Route path="/login"          element={<LoginPage />} />
+          <Route path="/login"          element={<LoginRouteKey><LoginPage /></LoginRouteKey>} />
           <Route path="/signup"         element={<SignupPage />} />
           <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
           <Route element={<ProtectedRoute />}>

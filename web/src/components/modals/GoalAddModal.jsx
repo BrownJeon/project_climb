@@ -3,6 +3,7 @@ import { Btn } from '../atoms';
 import { trainingApi } from '../../api/training';
 import { gymsApi } from '../../api/gyms';
 import { COLOR_KEYS, colorMeta } from '../../utils/colors';
+import useBackHandler from '../../native/useBackHandler';
 
 const CATEGORIES = [
   ['bouldering',   '볼더링'],
@@ -34,6 +35,7 @@ function parseConditioningLabel(label) {
 }
 
 export default function GoalAddModal({ goal, onClose, onSaved, onDeleted }) {
+  useBackHandler(true, onClose);
   const isEdit = !!goal;
   const [title, setTitle] = useState(goal?.title || '');
   const [category, setCategory] = useState(goal?.category || 'bouldering');

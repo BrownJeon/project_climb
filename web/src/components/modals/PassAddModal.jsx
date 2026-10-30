@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Btn, RadioOpt } from '../atoms';
 import { gymsApi } from '../../api/gyms';
 import { passesApi } from '../../api/passes';
+import useBackHandler from '../../native/useBackHandler';
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function plusDaysISO(days) {
@@ -24,6 +25,7 @@ const PERIOD_MONTHS = [
 ];
 
 export default function PassAddModal({ onClose, onSaved }) {
+  useBackHandler(true, onClose);
   const [passType, setPassType] = useState('period'); // 'period' | 'count'
   const [gymId, setGymId] = useState('');
   const [gyms, setGyms] = useState([]);

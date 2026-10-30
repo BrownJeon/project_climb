@@ -1,3 +1,6 @@
+import { isNativeApp } from '../native/bridge.js';
+import { startAppLogin } from '../native/appLogin.js';
+
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 48 48" style={{ flexShrink: 0 }}>
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -24,7 +27,12 @@ export default function OAuthButtons() {
       {BUTTONS.map((btn) => (
         <button
           key={btn.key}
-          onClick={() => { window.location.href = `/api/auth/${btn.key}`; }}
+          onClick={async () => {
+            // T009 — Google 은 WebView 안 OAuth 를 막는다(disallowed_useragent). 앱에서는 PKCE verifier 를 보관하고
+            // Custom Tab 으로 app-start 를 연다(이중 탭이면 이미 처리 중이라 true). 웹은 await 없이 기존 이동 그대로.
+            if (isNativeApp() && await startAppLogin(btn.key)) return;
+            window.location.href = `/api/auth/${btn.key}`;
+          }}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             padding: '11px 14px', width: '100%', cursor: 'pointer',

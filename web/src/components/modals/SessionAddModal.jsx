@@ -11,6 +11,7 @@ import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '.
 import TimeRangeField from '../TimeRangeField';
 import VideoLinkPicker from './VideoLinkPicker';
 import VideoChip from '../VideoChip';
+import useBackHandler from '../../native/useBackHandler';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
@@ -20,6 +21,7 @@ function todayISO() {
 }
 
 export default function SessionAddModal({ mode = 'full', initialPrefill = {}, onClose, onSaved }) {
+  useBackHandler(true, onClose);
   const [visitedAt, setVisitedAt] = useState(initialPrefill.visited_at || todayISO());
   const [gymId, setGymId] = useState(initialPrefill.gym_id || '');
   const [gyms, setGyms] = useState([]);

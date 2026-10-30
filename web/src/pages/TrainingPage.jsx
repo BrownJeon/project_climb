@@ -10,6 +10,7 @@ import RecordActionMenu from '../components/RecordActionMenu';
 import RecordEditModal from '../components/modals/RecordEditModal';
 import ClearedSummary from '../components/ClearedSummary';
 import { colorMeta } from '../utils/colors';
+import useBackHandler from '../native/useBackHandler';
 
 const PERSPECTIVE_OPTIONS = [
   { key: 'strength_weakness', label: '약점·강점' },
@@ -692,6 +693,7 @@ function AnalysisTab() {
 }
 
 function AnalysisDetailModal({ data, loading, onClose }) {
+  useBackHandler(true, onClose);
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',

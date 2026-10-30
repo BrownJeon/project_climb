@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Btn, ColorBadge } from '../atoms';
 import { I } from '../atoms/Icons';
 import { routesApi } from '../../api/routes';
+import useBackHandler from '../../native/useBackHandler';
 
 /**
  * 본인 영상 라이브러리에서 시도(attempt)에 연결할 영상 선택.
@@ -9,6 +10,7 @@ import { routesApi } from '../../api/routes';
  * 사용 흐름: SessionAddModal attempts row에서 "영상 검색·연결" 버튼 → 이 모달
  */
 export default function VideoLinkPicker({ defaultColor, defaultLevel, onPick, onClose }) {
+  useBackHandler(true, onClose);
   const [color, setColor] = useState(defaultColor || '');
   const [level, setLevel] = useState(defaultLevel || '');
   const [routes, setRoutes] = useState([]);

@@ -9,6 +9,7 @@ import TrainingItemFields, { rowToTrainingPayload, TRAINING_CATEGORIES } from '.
 import TimeRangeField from '../TimeRangeField';
 import ProblemPhotoModal from './ProblemPhotoModal';
 import { useVideoUpload } from '../../contexts/VideoUploadContext';
+import useBackHandler from '../../native/useBackHandler';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
@@ -90,6 +91,7 @@ function trainingSessionToEntry(s) {
 }
 
 export default function RecordEditModal({ kind, logId, initial, onSubmit, onClose, onChanged }) {
+  useBackHandler(true, onClose);
   const [memo, setMemo] = useState(initial.memo || '');
   const [date, setDate] = useState(initial.date || '');
   const [duration, setDuration] = useState(initial.duration_minutes ?? '');

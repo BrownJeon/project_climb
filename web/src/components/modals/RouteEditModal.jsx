@@ -3,12 +3,14 @@ import { Btn, ColorBadge, Chip } from '../atoms';
 import { COLOR_KEYS, COLORS, fmtRouteTitle } from '../../utils/colors';
 import { gymsApi } from '../../api/gyms';
 import { routesApi } from '../../api/routes';
+import useBackHandler from '../../native/useBackHandler';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 const WALL_TYPES = ['오버행', '슬랩', '버티컬', '루프', '볼륨'];
 const TECHNIQUES = ['다이나믹', '스태틱', '사이퍼', '하이스텝', '밸런스', '맨틀', '크림프', '포켓', '슬로퍼', '풋워크'];
 
 export default function RouteEditModal({ route, onClose, onSaved }) {
+  useBackHandler(true, onClose);
   const initColor = route.problem?.color || '';
   const initLevel = route.problem?.level || '';
   const initGymId = route.problem?.gym?.id || route.problem?.gym_id || '';

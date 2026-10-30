@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Btn } from '../atoms';
 import MapPicker from '../MapPicker';
 import { gymsApi } from '../../api/gyms';
+import useBackHandler from '../../native/useBackHandler';
 
 export default function GymAddModal({ gym, onClose, onSaved }) {
+  useBackHandler(true, onClose);
   const isEdit = !!gym;
   const [brand, setBrand] = useState(gym?.brand || '');
   const [branch, setBranch] = useState(gym?.branch || '');

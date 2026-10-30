@@ -4,6 +4,7 @@ import { I } from '../atoms/Icons';
 import { climbLogsApi } from '../../api/climbLogs';
 import { REVIEW_TAG_GROUPS, parseReviewTags, joinReviewTags, LEGACY_TAG_MAP } from '../../utils/reviewTags';
 import { detectHoldsByColor, blobToCircleAnnotation } from '../../utils/holdDetection';
+import useBackHandler from '../../native/useBackHandler';
 
 /**
  * 볼더링 문제 사진 + 홀드 강조 + 문제 회고 모달.
@@ -29,6 +30,7 @@ if (typeof document !== 'undefined' && !document.getElementById('tr-lp-kf')) {
 }
 
 export default function ProblemPhotoModal({ logId, cpId, photo, onSaved, onDeleted, onClose }) {
+  useBackHandler(true, onClose);
   const isEdit = !!photo;
   const [pendingFile, setPendingFile]   = useState(null);
   const [previewUrl, setPreviewUrl]     = useState(photo?.photo_url || null);

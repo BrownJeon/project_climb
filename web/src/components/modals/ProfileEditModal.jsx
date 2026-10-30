@@ -6,10 +6,12 @@ import { usersApi } from '../../api/users';
 import { gymsApi } from '../../api/gyms';
 import { useAuth } from '../../contexts/AuthContext';
 import { VIDEO_QUALITY_PRESETS, getVideoQualityKey, setVideoQualityKey } from '../../utils/videoQuality';
+import useBackHandler from '../../native/useBackHandler';
 
 const V_LEVELS = ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10', 'V11', 'V12'];
 
 export default function ProfileEditModal({ user, onClose, onSaved }) {
+  useBackHandler(true, onClose);
   const { authLogout } = useAuth();
   const [nickname, setNickname] = useState(user.nickname || '');
   const [bio, setBio] = useState(user.bio || '');
