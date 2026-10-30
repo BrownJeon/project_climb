@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <!-- 앱은 라이트 전용이다(웹이 시스템 다크 모드를 따르지 않는다). DayNight 부모를 쓰면 시스템 다크 모드에서
+         테마가 어두운 테마로 바뀌어 Android 10~12 WebView 가 웹을 강제로 어둡게 칠할 수 있으므로 라이트 부모를 쓴다. -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <!-- capacitor.config 의 adjustMarginsForEdgeToEdge 로 WebView 가 시스템 바를 피하면,
+             바 뒤로 보이는 것은 이 창 배경이다. 색 값은 theroute_colors.xml 한 곳에만 둔다.
+             밝은 배경 위이므로 바 아이콘은 어둡게 한다. -->
+        <item name="android:windowBackground">@color/theroute_window_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <!-- 시작 화면. Capacitor 템플릿의 파란 로고 그림(splash.png)을 지우고 창 배경색만 칠한다.
+         Android 12 이상 시스템 시작 화면의 배경도 같은 색으로 둔다(아이콘은 앱 아이콘이 쓰인다). -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@color/theroute_window_bg</item>
+        <item name="windowSplashScreenBackground">@color/theroute_window_bg</item>
+    </style>
+</resources>

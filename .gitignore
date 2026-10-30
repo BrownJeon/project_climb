@@ -3,8 +3,9 @@
 .env.local
 .env.*.local
 
-# 의존성
+# 의존성 — 끝 슬래시 없는 줄은 심볼릭 링크(예: 시험용 backend/node_modules → NFS 정본 링크)까지 거른다
 node_modules/
+node_modules
 .pnp
 .pnp.js
 
@@ -46,3 +47,18 @@ uploads/
 /*.jpg
 /*.jpeg
 /*.webp
+
+# Android 앱 (T009) — 소스(mobile/android)는 커밋, 빌드 산출물·기계별 설정·cap sync 생성물·서명 키는 제외
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/**/build/
+mobile/android/local.properties
+mobile/android/app/release/
+mobile/android/app/src/main/assets/public/
+mobile/android/app/src/main/assets/capacitor.config.json
+mobile/android/app/src/main/assets/capacitor.plugins.json
+mobile/android/app/src/main/res/xml/config.xml
+mobile/android/capacitor-cordova-android-plugins/
+*.keystore
+*.jks
+*signing.env

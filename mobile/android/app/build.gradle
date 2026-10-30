@@ -1,0 +1,119 @@
+apply plugin: 'com.android.application'
+
+// ── 버전 ─────────────────────────────────────────────────────────────────────
+// 네이티브 변경(android/**·capacitor.config.ts·AndroidManifest·Gradle 설정·@capacitor/* 플러그인 추가·app-shell·아이콘)
+// 중 하나라도 있으면 routeVersionCode 를 1 올리고 routeVersionName 도 올린다 — 웹 배포로는 반영되지 않으므로
+// APK 재빌드·사용자 재설치가 따른다. versionCode 는 정수 비교라 **줄어들면 안 된다**(덮어쓰기 설치가 거부된다).
+// 이력: 1 = 1.0.0 — T009 첫 셸(딥링크 theroute://auth·위치·카메라 권한·키보드 인셋·전용 키 서명)
+def routeVersionCode = 1
+def routeVersionName = "1.0.0"
+
+// ── 서명 ─────────────────────────────────────────────────────────────────────
+// Play 스토어 없이 사이드로드한다. **TheRoute 전용 release 키스토어**로 서명한다(2026-10-30 개정 §2 —
+// 공개 기본 비밀번호인 디버그 키스토어를 쓰지 않는다).
+// 값은 환경변수로만 받는다 — mobile/scripts/build-apk.sh 가 ~/.android/theroute-signing.env(권한 600, 저장소 밖)를
+// gradle 하위 셸에서만 읽어 넘긴다.
+//   THEROUTE_KEYSTORE           키스토어 경로(기본 위치 ~/.android/theroute-release.keystore)
+//   THEROUTE_KEYSTORE_PASSWORD  키스토어 비밀번호
+//   THEROUTE_KEY_ALIAS          키 별칭
+//   THEROUTE_KEY_PASSWORD       (선택) 키 비밀번호 — 없으면 키스토어 비밀번호(PKCS12 는 둘이 같다)
+// **디버그 키스토어로 폴백하지 않는다** — 값이 없거나 디버그 키를 가리키면 release 빌드를 실패시킨다(아래 taskGraph 검사).
+// 이 키를 잃으면 기존 설치본 위에 덮어쓰기가 거부돼 앱을 지우고 다시 깔아야 하고, 새면 같은 서명의 위조 업데이트가
+// 가능하다 → 키스토어·비밀번호는 커밋 금지. 백업 위치: NFS/homes/brownjeon/backup/android-signing/theroute/
+def signingEnv = { String key ->
+    def v = System.getenv(key)
+    return (v == null || v.trim().isEmpty()) ? null : v.trim()
+}
+def releaseKeystorePath = signingEnv('THEROUTE_KEYSTORE')
+def releaseKeystorePassword = signingEnv('THEROUTE_KEYSTORE_PASSWORD')
+def releaseKeyAlias = signingEnv('THEROUTE_KEY_ALIAS')
+def releaseKeyPassword = signingEnv('THEROUTE_KEY_PASSWORD') ?: releaseKeystorePassword
+
+android {
+    namespace "com.miraclepenguin.theroute"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.miraclepenguin.theroute"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode routeVersionCode
+        versionName routeVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseKeystorePath != null) {
+                storeFile file(releaseKeystorePath)
+            }
+            storePassword releaseKeystorePassword
+            keyAlias releaseKeyAlias
+            keyPassword releaseKeyPassword
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            debuggable false
+            // WebView 셸이다 — R8 이득(수백 KB)보다 플러그인 리플렉션이 깨질 위험이 크다(StockInvest·TheKaiwa 와 같음).
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+// release 작업이 그래프에 있을 때만 서명 값을 검사한다(clean·debug 빌드는 막지 않는다). 값은 출력하지 않는다.
+gradle.taskGraph.whenReady { graph ->
+    def wantsRelease = graph.allTasks.any { t -> t.project == project && t.name.toLowerCase().contains('release') }
+    if (!wantsRelease) {
+        return
+    }
+    def missing = []
+    if (releaseKeystorePath == null) missing << 'THEROUTE_KEYSTORE'
+    if (releaseKeystorePassword == null) missing << 'THEROUTE_KEYSTORE_PASSWORD'
+    if (releaseKeyAlias == null) missing << 'THEROUTE_KEY_ALIAS'
+    if (!missing.isEmpty()) {
+        throw new GradleException("release 서명 환경변수 없음: ${missing.join(', ')} — mobile/scripts/build-apk.sh 로 빌드한다(디버그 키 폴백 없음)")
+    }
+    def ks = file(releaseKeystorePath)
+    if (!ks.isFile()) {
+        throw new GradleException("release 키스토어 파일이 없다(THEROUTE_KEYSTORE) — 디버그 키로 대신 서명하지 않는다")
+    }
+    if (ks.name == 'debug.keystore' || releaseKeyAlias == 'androiddebugkey') {
+        throw new GradleException("release 를 디버그 키로 서명하려 했다 — TheRoute 전용 키스토어만 쓴다")
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

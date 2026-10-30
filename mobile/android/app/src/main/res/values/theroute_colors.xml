@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 창 배경 = 시스템 바 뒤·시작 화면 배경(styles.xml 이 참조). 이 색의 유일한 정의다.
+         값은 web/src/styles/tokens.css 의 surface 토큰(#ffffff, 웹 상단바·하단 탭과 같은 색) — 데모 v1 결정 D2 B.
+         XML 주석에는 하이픈 두 개를 쓸 수 없어 토큰 이름을 하이픈 없이 적는다. -->
+    <color name="theroute_window_bg">#FFFFFF</color>
+</resources>

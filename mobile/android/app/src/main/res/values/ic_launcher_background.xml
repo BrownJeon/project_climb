@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 생성물: mobile/scripts/gen-app-icons.mjs. 손으로 고치지 말 것. -->
+<resources>
+    <color name="ic_launcher_background">#EE6438</color>
+</resources>

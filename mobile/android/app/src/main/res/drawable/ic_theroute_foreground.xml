@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 생성물: mobile/scripts/gen-app-icons.mjs. 손으로 고치지 말 것. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M46,78 L62,56 L48,32"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path android:pathData="M39.5,78 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0" android:fillColor="#FFFFFF" />
+    <path android:pathData="M56.5,56 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0" android:fillColor="#FFFFFF" />
+    <path android:pathData="M40.5,32 a7.5,7.5 0 1,0 15,0 a7.5,7.5 0 1,0 -15,0" android:fillColor="#FFFFFF" />
+</vector>

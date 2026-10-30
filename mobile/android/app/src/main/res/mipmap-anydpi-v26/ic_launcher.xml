@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 생성물: mobile/scripts/gen-app-icons.mjs. 손으로 고치지 말 것. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_theroute_foreground" />
+    <monochrome android:drawable="@drawable/ic_theroute_monochrome" />
+</adaptive-icon>

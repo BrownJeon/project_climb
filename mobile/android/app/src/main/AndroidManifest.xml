@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- allowBackup=false: WebView localStorage 의 로그인 JWT(theroute_token)가 Android 자동 백업으로
+         기기 밖에 복사되지 않게 한다. -->
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <!-- launchMode="singleTask": 로그인 딥링크(theroute://auth/callback)가 도착하면 이미 떠 있는
+             이 화면으로 돌아온다(새 화면이 하나 더 쌓이지 않는다). 같은 태스크 위에 떠 있던
+             Custom Tab(로그인 창)도 이때 함께 정리된다. -->
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
+            android:name=".MainActivity"
+            android:windowSoftInputMode="adjustResize"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- OAuth 로그인 복귀 딥링크. Google 은 WebView 안 로그인을 막으므로 앱은 Custom Tab 으로
+                 로그인을 열고, 서버가 로그인 끝에 theroute://auth/callback?code=(60초 1회용 코드) 로
+                 302 한다. 이 intent-filter 가 없으면 로그인을 마쳐도 브라우저에 "주소를 열 수 없습니다"가
+                 뜨고 앱은 로그인 화면에 그대로 남는다.
+                 딥링크에는 JWT 가 아니라 1회용 코드만 싣는다(웹이 POST /api/auth/app-exchange 로
+                 code 와 PKCE verifier 를 함께 보내 교환한다). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="theroute" android:host="auth" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 위치: GymListPage 의 내 주변 암장 검색(navigator.geolocation). WebView 가 권한을 요청하려면
+         앱 권한이 먼저 선언돼 있어야 한다. 프롬프트 처리는 Capacitor 7 BridgeWebChromeClient 가 한다
+         (onGeolocationPermissionsShowPrompt 구현 확인, 2026-10-30). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 카메라: 문제 사진·프로필 사진 업로드의 input type=file 촬영 경로. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+</manifest>
