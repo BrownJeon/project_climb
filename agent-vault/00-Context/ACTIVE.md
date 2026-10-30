@@ -28,7 +28,9 @@ tags:
 - 사용자 결정: 카카오 로그인은 구현하지 않고 **제거**. `sns_provider` ENUM에서 `kakao` 삭제, 모바일 로그인 버튼·`getKakaoProfile` 제거 → Done ([[T005-remove-kakao-login]])
 - ⚠️ **카카오 지도 API(`KAKAO_REST_API_KEY`)는 유지** — 암장 위치 검색 실사용. 향후 "카카오 제거" 작업 시 반드시 구분할 것
 
-**안드로이드 APK 라인 (9월) — 설계·계획 완료, 구현 착수 대기 ⏸️**
+**▶ 2026-10-30 재개: T009 구현 진행 중** — 사용자 "권고대로 진행해줘". 결정: 전용 서명 키 · PKCE 포함 · APK 직접 전달 · push 는 Reviewer·QA 통과 + 사용자 승인 후. 작업은 격리 worktree `~/.node-local/theroute-app`(브랜치 `mobile-app-t009`)에서, 계획 개정은 worktree `docs/superpowers/plans/2026-10-30-android-apk-addendum.md`(09-18 계획보다 우선). 데모 게이트 `delta`(drafting) — 화면 파일 배선은 승인 뒤. 아래 "9월" 절은 과거 기록이다(팀 재개편 T010 은 09-18 완료, "구현은 팀 재개편 이후" 조건은 해소됨).
+
+**안드로이드 APK 라인 (9월) — 설계·계획 완료 (2026-10-30 구현 재개, 위 참고)**
 - BJJ task-039의 Capacitor 7 원격 URL 셸 방식을 이식 → [[T009-android-apk]]
 - 산출물: 설계 스펙 + **11개 태스크 구현 계획**(각 파일의 실제 코드·TDD 단계 포함). 둘 다 커밋됨
   - `docs/superpowers/specs/2026-09-18-android-apk-design.md`
