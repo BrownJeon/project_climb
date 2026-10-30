@@ -50,6 +50,11 @@ app.use('/api/geo', require('./routes/geo'));
 const distDir = path.join(__dirname, '../../web/dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir, { index: false }));
+  // 앱(Android APK) 로그인 복귀 — T009. dist 정적 서빙 뒤 · SPA 폴백 앞.
+  // route_app_login 쿠키(= Custom Tab 에서 시작한 앱 로그인)가 있을 때만 /oauth/callback·/login?error= 를
+  // 가로채 theroute://auth/callback?code=… 로 302 하고, 쿠키가 없으면 next() — 웹 로그인 흐름은 그대로다.
+  // 🔴 아래 SPA 폴백 정규식은 그대로 둔다.
+  app.get(['/oauth/callback', '/login'], require('./routes/appOAuthCallback').createAppOAuthCallbackHandler());
   app.get(/^\/(?!api|uploads|health).*$/, (_req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.sendFile(path.join(distDir, 'index.html'));
