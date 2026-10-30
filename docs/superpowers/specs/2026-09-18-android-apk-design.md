@@ -207,6 +207,7 @@ provider 화이트리스트(`['google','github']`) 검사 → 표시 쿠키 심�
 
 같은 파일, 같은 위치. `appAuthCodes.consume(code)` → `ok`면 토큰 반환, 형식 오류 400,
 만료·미지의·재사용 401. `Cache-Control: no-store`.
+(2026-10-30 보강: 형식 오류 400 은 비밀과 무관하므로 코드를 태우지 않는다 — 형식이 맞는 시도는 결과와 무관하게 한 번에 소각하고, 존재·불일치·만료·재사용은 구별 불가한 같은 401. 개정 문서 §3-2 ④ 참고.)
 
 ### `routes/appOAuthCallback.js` — 복귀 가로채기
 
@@ -447,7 +448,7 @@ headless로는 시스템 바·키보드가 재현되지 않는다.
 |---|---|---|
 | 실기기 없이는 edge-to-edge·키보드 판정 불가 | 검증 한계 | 빌드·정적 검사까지 수행 후 사용자 실기 확인 요청 |
 | WebView geolocation 권한 프롬프트 | 구현 중 확정 | Capacitor 7 `BridgeWebChromeClient` 소스 확인 → 미처리면 `MainActivity`에서 보강 |
-| 커스텀 스킴 PKCE 미결속 | 보안(MEDIUM) | **보류**. 다른 앱이 `theroute://auth`를 등록하면 60초·1회용 코드를 가로챌 이론적 여지. 단일 사용자 범위라 BJJ와 동일하게 보류하고, 다중 사용자로 넓히면 app-start challenge / app-exchange verifier 결속을 추가한다 |
+| 커스텀 스킴 PKCE 결속 | 보안(MEDIUM) | **2026-10-30 개정으로 PKCE(S256) 적용** — 개정 문서 §3. 남는 위험: 악성 앱이 **자기 challenge 로 직접 시작한** 로그인 흐름은 PKCE 가 막지 못한다(사용자가 그 Custom Tab 에서 로그인을 마치고 악성 앱이 `theroute://` 를 수신하는 경우). 근본 대책은 Android App Links(https 검증 링크 + `assetlinks.json`) — 후속 task 후보(StockInvest T-091 M2 선례). 단일 사용자 규모라 이번 릴리스에서는 문서화된 잔여 위험으로 둔다 |
 | 10분 쿠키 잔존 | UX 엣지케이스 | 앱 로그인을 시작만 하고 10분 안에 같은 폰 크롬에서 웹 로그인하면 그 1회가 앱 스킴으로 넘어간다. 콜백에서 즉시 삭제하므로 1회로 끝난다 |
 | `project_climb` 자동배포 미작동 | 기존 이슈 | board Backlog 항목. pm2가 작업 디렉터리를 직접 실행하므로 현재는 무해 — 이번 작업 범위 밖 |
 
