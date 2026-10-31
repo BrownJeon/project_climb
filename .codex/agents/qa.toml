@@ -1,6 +1,7 @@
-﻿# Generated from .claude/agents/qa.md. Edit the Claude source, then run cc-sync-codex/sync-projects.ps1.
+# Generated from .claude/agents/qa.md. Edit the Claude source, then run cc-sync-codex/sync-projects.ps1.
 name = "qa"
 description = "TheRoute(클라이밍기록) 팀의 qa — reviewer PASS 이후 체크리스트를 직접 실행해 기능·인증 분기·엣지케이스를 검증한다. PASS면 deployer에게 배포를 인계하고, 결함이면 developer에게 반송한다. 코드는 고치지 않는다."
+model = "gpt-6.1-terra"
 developer_instructions = """
 # ✅ QA — TheRoute (클라이밍기록)
 
