@@ -1,3 +1,17 @@
+<!-- TASK-TOOL-CONTEXT:BEGIN -->
+## 작업문서의 시작 도구·현재 담당·적용 절차 (2026-11-05)
+
+새 작업문서 작성·기존 작업 재개·주 작업 인수 시 `execution_context`와 본문의 `실행 도구·절차 이력`을 확인·기록한다. 필드는 `schema_version: 1`, `origin_tool`, `current_tool`, `current_procedure`, `current_scope`, `last_event_id`다. 도구 값은 `codex | claude | unknown`, 절차 값은 `codex_scoped | claude_standard | unknown`이다.
+
+- `origin_tool`은 최초 시작 도구로 보존한다. `current_tool`은 현재 주 작업을 실제 인수한 도구이며, 현재 절차는 최초 도구만이 아니라 **현재 주 작업 담당과 인수 범위**로 판단한다.
+- 현재 Codex 담당이면 `codex_scoped`: 분석·설계와 명시적으로 맡긴 작은 구현, 필요한 구현·최종 테스트·검증·배포는 Claude에 인계한다. 현재 Claude 담당이면 `claude_standard`: 기존 Claude의 분석부터 배포까지 작업 방식을 유지한다. Claude 시작 → Codex 주 작업 인수 → Claude 재인수도 최초 시작값은 바꾸지 않고 단계별로 기록한다.
+- 인계 요청·문서 열람·다른 도구의 검토/서브에이전트 호출만으로 현재 담당을 바꾸지 않는다. 실제 주 작업 인수 때 현재 메타데이터를 갱신하고 시각·이전/현재 도구·적용 절차·맡은 범위·사용자 지시/수신 근거·남은 일을 이력에 append한다. 이미 허용된 인수를 재승인받지 않으며, 실제 범위가 불명확할 때만 질문한다.
+- 과거 시작 도구를 추측하지 않는다. 확인 불가하면 `origin_tool: unknown`과 이유를 남기고 현재 담당은 실제 근거대로 기록한다. 나중에 근거를 찾으면 정정 이력을 추가한다. 과거 task 전체 일괄 수정이나 완료/승인 상태 변경은 하지 않는다.
+- 공통 실행 메타데이터와 전환 이력은 현재 메인 세션/조율 역할이 관리한다. 자식 역할은 자기 기록의 실제 실행 도구만 밝히며 다른 역할 기록을 대리 작성하지 않는다. 기존 승인·데모·운영·회사 자료 전송 제한을 이 필드로 대체하거나 우회하지 않는다.
+
+정본: 워크스페이스 루트의 `docs/task-tool-context.md` 및 `docs/agent-vault-protocol.md`. 이 기록 규칙은 적용하되, 상세 역할 재정의·자동 인계 실행기의 변경은 기존처럼 사용자 초안 검토 후 진행한다.
+<!-- TASK-TOOL-CONTEXT:END -->
+
 # TheRoute 프로젝트
 
 **더 루트 (The Route)** - 클라이머를 위한 소셜 네트워킹 및 AR 루트 공유 플랫폼
